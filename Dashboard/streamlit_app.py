@@ -118,11 +118,11 @@ def _proper_case(name: str) -> str:
     return "".join(out)
 
 def nombre_fake(seed, genero=None):
-    m = [
+    M = [
         "juan","carlos","andres","diego","luis","mateo","jorge","felipe","daniel","santiago",
         "sebastian","nicolas","alejandro","miguel","ricardo","tomas","bruno","rafael"
     ]
-    f = [
+    F = [
         "maria","laura","ana","camila","valentina","carolina","paula","daniela","sara","gabriela",
         "andrea","sofia","juliana","natalia","isabel","manuela","fernanda","lucia"
     ]
