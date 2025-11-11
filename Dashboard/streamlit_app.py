@@ -214,10 +214,11 @@ df, ultima_fecha, RIESGO, ORDEN, lat_col, lon_col, VAL_COL = load_data()
 st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 col_a, col_b, col_c, col_d = st.columns([1,0.1,6,3], gap="small")
 with col_a:
-    try:
-        st.image("assets/logo_uni.png", use_container_width=False)
-    except Exception:
-        st.write("")
+    lp = _logo_path()
+    if lp:
+        st.image(lp, use_container_width=False)
+    else:
+        st.write("") 
 with col_b:
     st.markdown('<div class="header-divider"></div>', unsafe_allow_html=True)
 with col_c:
