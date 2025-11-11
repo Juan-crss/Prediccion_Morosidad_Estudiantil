@@ -117,12 +117,23 @@ def _proper_case(name: str) -> str:
             out.append(p)
     return "".join(out)
 
+def normaliza_genero(x):
+    t = str(x).strip().lower()
+    fem = {"f","femenino","female","fem","mujer","femenina"}
+    masc = {"m","masculino","male","hombre","varon","varón","masc"}
+    if t in fem: return "f"
+    if t in masc: return "m"
+    # también aceptamos inicial por prefijo
+    if t.startswith("f"): return "f"
+    if t.startswith("m"): return "m"
+    return None
+
 def nombre_fake(seed, genero=None):
-    M = [
+    m = [
         "juan","carlos","andres","diego","luis","mateo","jorge","felipe","daniel","santiago",
         "sebastian","nicolas","alejandro","miguel","ricardo","tomas","bruno","rafael"
     ]
-    F = [
+    f = [
         "maria","laura","ana","camila","valentina","carolina","paula","daniela","sara","gabriela",
         "andrea","sofia","juliana","natalia","isabel","manuela","fernanda","lucia"
     ]
@@ -132,12 +143,18 @@ def nombre_fake(seed, genero=None):
     ]
 
     h = int(hashlib.sha256(str(seed).encode()).hexdigest(), 16)
-    base = f if str(genero).lower() in {"f","femenino"} else m
+    g = normaliza_genero(genero)
+
+    # si no hay género, repartir 50/50 con el hash
+    if g is None:
+        base = f if (h % 2 == 0) else m
+    else:
+        base = f if g == "f" else m
 
     nombre = base[h % len(base)]
     apellido = ap[(h // 97) % len(ap)]
-
     return f"{_proper_case(nombre)} {_proper_case(apellido)}"
+
 
 # ================== Data ==================
 @st.cache_data
@@ -183,7 +200,7 @@ def load_data():
         if any(x in t for x in ["medic","salud","enfermer","odont"]):       return "Medicina y Salud"
         if any(x in t for x in ["admin","negoc","finan","conta","mercad"]): return "Negocios y Adm"
         if any(x in t for x in ["derech","jur"]):                           return "Derecho"
-        return "otros"
+        return "Otros"
     df["programa_cluster"] = df["programa"].astype(str).map(rule_cluster)
     df["facultad_cluster"] = df["facultad"].astype(str).map(rule_cluster)
 
