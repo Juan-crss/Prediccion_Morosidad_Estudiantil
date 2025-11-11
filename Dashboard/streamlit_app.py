@@ -117,6 +117,23 @@ def _proper_case(name: str) -> str:
             out.append(p)
     return "".join(out)
 
+def normaliza_cliente(x):
+    if x is None:
+        return None
+    t = str(x).strip()
+    if t == "": 
+        return None
+    # sin acentos y en minúsculas
+    t0 = unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode("ascii").lower()
+    t0 = " ".join(t0.split())  # colapsa dobles espacios
+    if t0 in {"estudiante"}:
+        return "Estudiante"
+    if t0 in {"no estudiante", "no-estudiante", "no_estudiante", "noestudiante"}:
+        return "No Estudiante"
+    # fallback: Title Case
+    return t.title()
+
+
 def normaliza_genero(x):
     t = str(x).strip().lower()
     fem = {"f","femenino","female","fem","mujer","femenina"}
