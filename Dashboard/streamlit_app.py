@@ -233,7 +233,7 @@ def load_data():
         df["mora_flag"] = 0
 
     # créditos activos por estudiante
-    col_id2 = next((c for c in df.columns if c.lower()=="idbanner"), None)
+    col_id2 = next((c for c in df.columns if c.lower()=="id_estudiante"), None)
     if col_id2:
         df["_credits_by_id"] = df.groupby(col_id2)[col_id2].transform("size")
     else:
