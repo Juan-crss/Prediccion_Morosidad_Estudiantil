@@ -161,7 +161,10 @@ def nombre_fake(seed, genero=None):
 def load_data():
     DATA = Path("DB_Model") / "df_dash_with_preds.csv"
     df = pd.read_csv(DATA)
-
+    # normaliza 'cliente'
+    if "cliente" in df.columns:
+        df["cliente"] = df["cliente"].map(normaliza_cliente)
+    
     if "fecha_aprobacion" in df.columns:
         df["fecha_aprobacion"] = pd.to_datetime(df["fecha_aprobacion"], errors="coerce")
         ultima_fecha = df["fecha_aprobacion"].max()
