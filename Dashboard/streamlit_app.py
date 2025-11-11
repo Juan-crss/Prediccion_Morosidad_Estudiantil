@@ -5,6 +5,8 @@ import numpy as np
 from pathlib import Path
 import plotly.express as px
 import re, unicodedata, hashlib
+import base64
+
 
 
 # ================== Config & Theme ==================
@@ -212,30 +214,28 @@ def load_data():
 df, ultima_fecha, RIESGO, ORDEN, lat_col, lon_col, VAL_COL = load_data()
 
 
-def find_logo_path() -> str | None:
-    # __file__ está en Dashboard/streamlit_app.py
-    here = Path(__file__).parent            # Dashboard/
-    root = here.parent                      # raíz del repo
-    candidates = [
-        root / "assets" / "logo_uni.png",           # assets en raíz
-        here / "assets" / "logo_uni.png",           # Dashboard/assets
-        Path("assets/logo_uni.png"),                # por si el cwd cambia
-        Path("Dashboard/assets/logo_uni.png"),
-    ]
-    for p in candidates:
-        if p.exists():
-            return str(p)   # <- importante: convertir a string
-    return None
+def show_logo_inline():
+    lp = find_logo_path()
+    if not lp:
+        return
+    try:
+        with open(lp, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        # altura igual a tu Dash (68px)
+        st.markdown(
+            f'<img src="data:image/png;base64,{b64}" style="height:68px;object-fit:contain;" />',
+            unsafe_allow_html=True
+        )
+    except Exception:
+        # evita romper si hay cualquier problema
+        st.write("")
+
 
 # ================== Header ==================
 st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 col_a, col_b, col_c, col_d = st.columns([1,0.1,6,3], gap="small")
 with col_a:
-    lp = find_logo_path()
-    if lp is not None:
-        st.image(lp, use_container_width=False)
-    else:
-        st.write("")  # evita TypeError si no hay logo
+    show_logo_inline()   # <--- reemplaza la sección que hacía st.image(lp)
 with col_b:
     st.markdown('<div class="header-divider"></div>', unsafe_allow_html=True)
 with col_c:
@@ -248,7 +248,8 @@ with col_d:
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# ================== Filtros (sin labels, sobrios) ==================
+
+# ================== Filtros ==================
 with st.container():
     st.markdown('<div class="container-soft card"><div class="card-body">', unsafe_allow_html=True)
     r1c1, r1c2, r1c3, r1c4 = st.columns(4, gap="medium")
