@@ -210,6 +210,14 @@ def load_data():
 
 df, ultima_fecha, RIESGO, ORDEN, lat_col, lon_col, VAL_COL = load_data()
 
+from pathlib import Path
+
+def _logo_path():
+    for p in [Path("assets/logo_uni.png"), Path("Dashboard/assets/logo_uni.png")]:
+        if p.exists():
+            return str(p)
+    return None
+  
 # ================== Header ==================
 st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 col_a, col_b, col_c, col_d = st.columns([1,0.1,6,3], gap="small")
