@@ -6,6 +6,7 @@ from pathlib import Path
 import plotly.express as px
 import re, unicodedata, hashlib
 
+
 # ================== Config & Theme ==================
 st.set_page_config(page_title="Riesgo de morosidad en créditos estudiantiles", layout="wide")
 brand, bg, bg_soft = "#003366", "#f7f9fb", "#f0f4f8"
@@ -176,10 +177,10 @@ def load_data():
 
     def rule_cluster(txt):
         t = nrm(txt)
-        if any(x in t for x in ["ingenier","sistemas","software","datos"]): return "software y ti"
-        if any(x in t for x in ["medic","salud","enfermer","odont"]):       return "medicina y salud"
-        if any(x in t for x in ["admin","negoc","finan","conta","mercad"]): return "negocios y adm"
-        if any(x in t for x in ["derech","jur"]):                           return "derecho"
+        if any(x in t for x in ["ingenier","sistemas","software","datos"]): return "Software y TI"
+        if any(x in t for x in ["medic","salud","enfermer","odont"]):       return "Medicina y Salud"
+        if any(x in t for x in ["admin","negoc","finan","conta","mercad"]): return "Negocios y Adm"
+        if any(x in t for x in ["derech","jur"]):                           return "Derecho"
         return "otros"
     df["programa_cluster"] = df["programa"].astype(str).map(rule_cluster)
     df["facultad_cluster"] = df["facultad"].astype(str).map(rule_cluster)
@@ -210,7 +211,6 @@ def load_data():
 
 df, ultima_fecha, RIESGO, ORDEN, lat_col, lon_col, VAL_COL = load_data()
 
-from pathlib import Path
 
 def find_logo_path() -> str | None:
     # __file__ está en Dashboard/streamlit_app.py
