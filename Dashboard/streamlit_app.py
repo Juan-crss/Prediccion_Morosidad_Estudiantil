@@ -214,6 +214,21 @@ def load_data():
 df, ultima_fecha, RIESGO, ORDEN, lat_col, lon_col, VAL_COL = load_data()
 
 
+def find_logo_path():
+    # __file__ está en Dashboard/streamlit_app.py
+    here = Path(__file__).parent     
+    root = here.parent              
+    candidates = [
+        root / "assets" / "logo_uni.png",       
+        here / "assets" / "logo_uni.png",        
+        Path("assets/logo_uni.png"),             
+        Path("Dashboard/assets/logo_uni.png"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return str(p)   
+    return None
+
 def show_logo_inline():
     lp = find_logo_path()
     if not lp:
@@ -221,21 +236,21 @@ def show_logo_inline():
     try:
         with open(lp, "rb") as f:
             b64 = base64.b64encode(f.read()).decode("utf-8")
-        # altura igual a tu Dash (68px)
+        # altura como en tu Dash
         st.markdown(
             f'<img src="data:image/png;base64,{b64}" style="height:68px;object-fit:contain;" />',
             unsafe_allow_html=True
         )
     except Exception:
-        # evita romper si hay cualquier problema
         st.write("")
+
 
 
 # ================== Header ==================
 st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 col_a, col_b, col_c, col_d = st.columns([1,0.1,6,3], gap="small")
 with col_a:
-    show_logo_inline()   # <--- reemplaza la sección que hacía st.image(lp)
+    show_logo_inline()   # ← ya no llama st.image; usa base64
 with col_b:
     st.markdown('<div class="header-divider"></div>', unsafe_allow_html=True)
 with col_c:
@@ -246,6 +261,7 @@ with col_d:
         unsafe_allow_html=True
     )
 st.markdown('</div>', unsafe_allow_html=True)
+
 
 
 
