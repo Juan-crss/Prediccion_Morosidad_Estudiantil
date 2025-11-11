@@ -212,21 +212,30 @@ df, ultima_fecha, RIESGO, ORDEN, lat_col, lon_col, VAL_COL = load_data()
 
 from pathlib import Path
 
-def _logo_path():
-    for p in [Path("assets/logo_uni.png"), Path("Dashboard/assets/logo_uni.png")]:
+def find_logo_path() -> str | None:
+    # __file__ está en Dashboard/streamlit_app.py
+    here = Path(__file__).parent            # Dashboard/
+    root = here.parent                      # raíz del repo
+    candidates = [
+        root / "assets" / "logo_uni.png",           # assets en raíz
+        here / "assets" / "logo_uni.png",           # Dashboard/assets
+        Path("assets/logo_uni.png"),                # por si el cwd cambia
+        Path("Dashboard/assets/logo_uni.png"),
+    ]
+    for p in candidates:
         if p.exists():
-            return str(p)
+            return str(p)   # <- importante: convertir a string
     return None
-  
+
 # ================== Header ==================
 st.markdown('<div class="header-wrap">', unsafe_allow_html=True)
 col_a, col_b, col_c, col_d = st.columns([1,0.1,6,3], gap="small")
 with col_a:
-    lp = _logo_path()
-    if lp:
+    lp = find_logo_path()
+    if lp is not None:
         st.image(lp, use_container_width=False)
     else:
-        st.write("") 
+        st.write("")  # evita TypeError si no hay logo
 with col_b:
     st.markdown('<div class="header-divider"></div>', unsafe_allow_html=True)
 with col_c:
@@ -238,8 +247,6 @@ with col_d:
     )
 st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown(f'<div class="small-muted">Actualización: {ultima_fecha.strftime("%Y-%m-%d") if pd.notna(ultima_fecha) else "-"}</div>', unsafe_allow_html=True)
-st.write("")
 
 # ================== Filtros (sin labels, sobrios) ==================
 with st.container():
