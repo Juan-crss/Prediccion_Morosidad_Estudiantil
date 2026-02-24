@@ -175,9 +175,18 @@ def nombre_fake(seed, genero=None):
 
 # ================== Data ==================
 @st.cache_data
+@st.cache_data
 def load_data():
-    DATA = Path("DB_Model") / "df_dash_with_preds.csv"
+    # streamlit_app.py está en Dashboard/
+    ROOT = Path(__file__).resolve().parents[1]  # .../Prediccion_Morosidad_Estudiantil
+    DATA = ROOT / "Database" / "Data_model_predictions" / "df_dash_with_preds.csv"
+
+    # 
+    if not DATA.exists():
+        raise FileNotFoundError(f"No se encontró el archivo: {DATA}")
+
     df = pd.read_csv(DATA)
+    
     # normaliza 'cliente'
     if "cliente" in df.columns:
         df["cliente"] = df["cliente"].map(normaliza_cliente)
