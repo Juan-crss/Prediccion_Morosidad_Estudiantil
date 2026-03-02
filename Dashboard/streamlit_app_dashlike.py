@@ -512,7 +512,7 @@ st.markdown(
         Más que mostrar datos, integra un modelo de predicción que transforma información dispersa en alertas tempranas y visión preventiva para la gestión financiera.
       </p>
       <p style="font-size: 12px; color:#666; margin-top: 0;">
-        Fuentes: <b>f_dash_with_preds.csv</b> (base resultante del modelo) · Detalles en GitHub:
+        Fuentes: <b>f_dash_with_preds.csv</b> (base resultante del modelo) · Detalles y documentación en GitHub:
         <a href="https://github.com/CarolinaFuentes13/Visualizaci-n-y-storytelling.git" target="_blank">Visualización y storytelling</a>
       </p>
     </div>
