@@ -74,6 +74,12 @@ st.markdown(
         margin: 0;
         line-height: 1.15;
       }}
+      .dash-tagline {{
+        color: #2b3a55;
+        font-size: 0.95rem;
+        font-weight: 700;
+        margin-top: 4px;
+      }}
       .dash-updated {{
         background: {brand};
         color: white;
@@ -166,6 +172,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# ================= Contenedores (UI) =================
+
+def bordered_container():
+    """Crea un contenedor con borde si la versión de Streamlit lo soporta."""
+    try:
+        return st.container(border=True)
+    except TypeError:
+        return st.container()
+
+
 # ================= Datos =================
 
 @st.cache_data
@@ -173,7 +189,7 @@ def load_base():
     # Ruta: ../Database/Data_model_predictions/f_dash_with_preds.csv (fallback al nombre anterior)
     BASE_DIR = Path(__file__).resolve().parents[1] / "Database" / "Data_model_predictions"
     candidates = [
-        BASE_DIR / "f_dash_with_preds.csv",
+        BASE_DIR / "df_dash_with_preds.csv",
         BASE_DIR / "df_dash_with_preds.csv",
     ]
     DATA = next((p for p in candidates if p.exists()), None)
@@ -494,7 +510,16 @@ with c2:
     st.markdown('<div class="dash-divider"></div>', unsafe_allow_html=True)
 
 with c3:
-    st.markdown(f'<div class="dash-title">{DASH_TITLE}</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'''
+        <div>
+          <div class="dash-title">{DASH_TITLE}</div>
+          <div class="dash-tagline">De gestión reactiva a alertas preventivas para priorizar recaudo</div>
+        </div>
+        ''',
+        unsafe_allow_html=True,
+    )
+
 
 with c4:
     st.markdown('<div class="dash-divider"></div>', unsafe_allow_html=True)
@@ -512,7 +537,7 @@ st.markdown(
         Más que mostrar datos, integra un modelo de predicción que transforma información dispersa en alertas tempranas y visión preventiva para la gestión financiera.
       </p>
       <p style="font-size: 12px; color:#666; margin-top: 0;">
-        Fuentes: <b>f_dash_with_preds.csv</b> (base resultante del modelo) · Detalles y documentación en GitHub:
+        Fuentes: <b>df_dash_with_preds.csv</b> (base resultante del modelo) · Detalles en GitHub:
         <a href="https://github.com/CarolinaFuentes13/Visualizaci-n-y-storytelling.git" target="_blank">Visualización y storytelling</a>
       </p>
     </div>
@@ -528,31 +553,28 @@ tab_dashboard, tab_docs = st.tabs(["Dashboard", "Documentación"])
 with tab_dashboard:
 # ================= Filtros =================
 
-    def filtrar(_df, f_ini, f_fin, fac_clu, prog_clu):
+    def filtrar(_df, f_ini, f_fin, prog_clu):
         dff = _df.copy()
 
-        # fechas (date_input devuelve date, y df es datetime)
-        if f_ini:
+        # fechas (año-mes): se evita error corrigiendo rangos invertidos
+        if f_ini is not None:
             dff = dff[dff["fecha_aprobacion"] >= pd.to_datetime(f_ini)]
-        if f_fin:
+        if f_fin is not None:
             dff = dff[dff["fecha_aprobacion"] <= pd.to_datetime(f_fin)]
 
-        if fac_clu:
-            dff = dff[dff["facultad_cluster"].isin(fac_clu)]
         if prog_clu:
             dff = dff[dff["programa_cluster"].isin(prog_clu)]
 
         return dff
 
-    with st.container():
-        st.markdown('<div class="card">', unsafe_allow_html=True)
+    with bordered_container():
         st.markdown('<div class="section-title">Filtros</div>', unsafe_allow_html=True)
         st.markdown(
-            '<div class="section-sub">Ajusta el rango de fechas y enfoca el análisis por segmentos de programa y facultad.</div>',
+            '<div class="section-sub">Ajusta el rango de fechas y enfoca el análisis por segmentos de programa.</div>',
             unsafe_allow_html=True
         )
 
-        f1, f2, f3 = st.columns(3)
+        f1, f2 = st.columns([1.2, 2.0])
 
         with f1:
             # Filtro amigable por Año–Mes (evita errores por fechas inválidas o rangos invertidos)
@@ -580,28 +602,27 @@ with tab_dashboard:
                 st.info("No hay fechas válidas en la base para filtrar.")
 
         with f2:
-
-            fac_clu_sel = st.multiselect(
-                "Facultad (segmento)",
-                options=sorted(df_base["facultad_cluster"].dropna().unique()),
-                default=[]
-            )
-
-        with f3:
-            prog_clu_sel = st.multiselect(
-                "Programa (segmento)",
-                options=sorted(df_base["programa_cluster"].dropna().unique()),
-                default=[]
-            )
-
-        st.markdown('</div>', unsafe_allow_html=True)
+            # Se deja un solo filtro segmentado para evitar duplicidad entre categorías
+            try:
+                prog_clu_sel = st.multiselect(
+                    "Programa (segmento)",
+                    options=sorted(df_base["programa_cluster"].dropna().unique()),
+                    default=[],
+                    placeholder="Selecciona..."
+                )
+            except TypeError:
+                prog_clu_sel = st.multiselect(
+                    "Programa (segmento)",
+                    options=sorted(df_base["programa_cluster"].dropna().unique()),
+                    default=[]
+                )
 
     # aplicar filtros
-    dff = filtrar(df_base, f_ini, f_fin, fac_clu_sel, prog_clu_sel)
+    dff = filtrar(df_base, f_ini, f_fin, prog_clu_sel)
 
     # ================= KPIs (Sección 1) =================
 
-    st.markdown('<div style="margin-top: 14px;">', unsafe_allow_html=True)
+    st.write("")
     st.markdown('<div class="section-title">KPIs</div>', unsafe_allow_html=True)
     st.markdown('<div class="story-subtitle">La foto rápida antes de actuar</div>', unsafe_allow_html=True)
     st.markdown(
@@ -616,7 +637,7 @@ with tab_dashboard:
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
     n = len(dff)
     n_alto = int(dff[dff[RIESGO].eq("Alto")].shape[0]) if n > 0 else 0
@@ -674,22 +695,20 @@ with tab_dashboard:
 
     # ================= Gráficos (Sección 2) =================
 
-    st.markdown('<div style="margin-top: 6px;">', unsafe_allow_html=True)
+    st.write("")
     st.markdown('<div class="section-title">Gráficos</div>', unsafe_allow_html=True)
     st.markdown('<div class="story-subtitle">De los números a la historia</div>', unsafe_allow_html=True)
     st.markdown(
         """
         <div class="story-desc">
-          A continuación se presentan las visualizaciones que permiten explorar el comportamiento de la cartera desde distintas perspectivas.
-          El gráfico de barras muestra la distribución de créditos por nivel de riesgo predicho. La línea de cuotas promedio permite identificar
-          patrones de financiación según el mes de aprobación y el nivel de riesgo. El mapa de calor revela en qué segmentos y años se concentra la mora real.
-          También se muestra cómo ha evolucionado la distribución de riesgo en el tiempo y, finalmente, el mapa georreferenciado ubica territorialmente los créditos
-          según su categoría de riesgo predicha.
+          Estas visualizaciones convierten el scoring en una guía de acción: muestran cuánto riesgo hay, cuándo se intensifica y en qué segmentos o territorios conviene intervenir primero.
+          Primero revisa el riesgo predicho (alerta temprana) para anticiparte; luego contrástalo con la mora real en Datacrédito (confirmación) para priorizar recaudo con evidencia.
+          El objetivo es que pases del “qué está pasando” al “dónde actuar” en pocos segundos.
         </div>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
+
 
     # --- Sub-sección: Riesgo predicho ---
     st.markdown('<div class="subsection-title">Riesgo predicho</div>', unsafe_allow_html=True)
@@ -752,7 +771,7 @@ with tab_dashboard:
 
     # ================= Tabla (Sección 3) =================
 
-    st.markdown('<div style="margin-top: 6px;">', unsafe_allow_html=True)
+    st.write("")
     st.markdown('<div class="section-title">Tabla</div>', unsafe_allow_html=True)
     st.markdown('<div class="story-subtitle">Del mapa al caso puntual</div>', unsafe_allow_html=True)
     st.markdown(
@@ -765,25 +784,34 @@ with tab_dashboard:
         """,
         unsafe_allow_html=True,
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Casos en mora (Datacrédito)</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="section-sub">Se listan los créditos con reporte de mora según Datacrédito, junto con su nivel de riesgo predicho y la probabilidad estimada.</div>',
-        unsafe_allow_html=True
-    )
 
-    top = dff[dff["mora_flag"] == 1].copy()
-    if not top.empty:
-        top["proba_str"] = top["proba_pred"].mul(100).map(lambda v: f"{v:.1f}%" if pd.notna(v) else "")
-        cols = ["nombre", "programa", "fecha_aprobacion", RIESGO, "proba_str", "_credits_by_id"]
-        tbl = top.sort_values("fecha_aprobacion", ascending=False)[cols].head(10)
-    else:
-        tbl = pd.DataFrame(columns=["nombre", "programa", "fecha_aprobacion", RIESGO, "proba_str", "_credits_by_id"])
+    with bordered_container():
+        st.markdown('<div class="section-title">Casos en mora (Datacrédito)</div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-sub">Se listan los créditos con reporte de mora según Datacrédito, junto con su nivel de riesgo predicho y la probabilidad estimada.</div>',
+            unsafe_allow_html=True
+        )
 
-    st.dataframe(tbl, use_container_width=True, hide_index=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        top = dff[dff["mora_flag"] == 1].copy()
+        if not top.empty:
+            top["proba_str"] = top["proba_pred"].mul(100).map(lambda v: f"{v:.1f}%" if pd.notna(v) else "")
+            cols = ["nombre", "programa", "fecha_aprobacion", RIESGO, "proba_str", "_credits_by_id"]
+            tbl = top.sort_values("fecha_aprobacion", ascending=False)[cols].head(10)
+        else:
+            tbl = pd.DataFrame(columns=["nombre", "programa", "fecha_aprobacion", RIESGO, "proba_str", "_credits_by_id"])
+
+        rename_map = {
+            "nombre": "Nombre",
+            "programa": "Programa",
+            "fecha_aprobacion": "Fecha aprobación",
+            RIESGO: "Riesgo",
+            "proba_str": "Prob. riesgo",
+            "_credits_by_id": "Créditos por estudiante",
+        }
+        tbl_display = tbl.rename(columns=rename_map)
+
+        st.dataframe(tbl_display, use_container_width=True, hide_index=True)
 
     # Conclusión Tabla
     if n == 0:
@@ -812,29 +840,26 @@ with tab_dashboard:
     else:
         exp_alto_all = 0.0
 
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Cierre</div>', unsafe_allow_html=True)
-    st.markdown('<div class="story-subtitle">Lo que nos deja la historia</div>', unsafe_allow_html=True)
+    with bordered_container():
+        st.markdown('<div class="section-title">Cierre</div>', unsafe_allow_html=True)
+        st.markdown('<div class="story-subtitle">Lo que nos deja la historia</div>', unsafe_allow_html=True)
 
-    st.markdown(
-        f"""
-        <div class="story-desc">
-          Al analizar <b>{n_all:,.0f}</b> créditos estudiantiles logramos identificar que, aunque la mayor parte del portafolio se ubica en nivel de riesgo bajo,
-          existe un <b>{pct_alto_all:.1f}%</b> clasificado en riesgo alto que concentra una exposición relevante (COP <b>{exp_alto_all:,.0f}</b>).
-          Esto recuerda que el foco no debe estar solo en la cantidad de casos, sino en el impacto económico que pueden concentrar ciertos segmentos.
-          <br/><br/>
-          Además, al observar la evolución en el tiempo y las diferencias por segmento, queda claro que el comportamiento no es uniforme:
-          hay cohortes y grupos donde la señal se intensifica y otros donde se estabiliza. En conclusión, el riesgo se entiende mejor cuando se mira
-          desde varias dimensiones: monto, tiempo, segmento y territorio, y este tablero convierte esa complejidad en alertas tempranas para priorizar acciones.
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div class="story-desc">
+              Al analizar <b>{n_all:,.0f}</b> créditos estudiantiles logramos identificar que, aunque la mayor parte del portafolio se ubica en nivel de riesgo bajo,
+              existe un <b>{pct_alto_all:.1f}%</b> clasificado en riesgo alto que concentra una exposición relevante (COP <b>{exp_alto_all:,.0f}</b>).
+              Esto recuerda que el foco no debe estar solo en la cantidad de casos, sino en el impacto económico que pueden concentrar ciertos segmentos.
+              <br/><br/>
+              Además, al observar la evolución en el tiempo y las diferencias por segmento, queda claro que el comportamiento no es uniforme:
+              hay cohortes y grupos donde la señal se intensifica y otros donde se estabiliza. En conclusión, el riesgo se entiende mejor cuando se mira
+              desde varias dimensiones: monto, tiempo, segmento y territorio, y este tablero convierte esa complejidad en alertas tempranas para priorizar acciones.
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 with tab_docs:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Documentación</div>', unsafe_allow_html=True)
     st.markdown('<div class="story-subtitle">De datos dispersos a señales tempranas</div>', unsafe_allow_html=True)
     st.markdown(
@@ -842,7 +867,7 @@ with tab_docs:
         <div class="story-desc">
           Este proyecto integra información histórica de crédito estudiantil (2021–2025) proveniente de fuentes institucionales,
           la somete a un proceso formal de calidad de datos y luego aplica un modelo predictivo para clasificar el riesgo de mora por crédito.
-          El resultado final se consolida en un archivo (<b>f_dash_with_preds.csv</b>) que alimenta este visualizador en Streamlit.
+          El resultado final se consolida en un archivo (<b>df_dash_with_preds.csv</b>) que alimenta este visualizador en Streamlit.
         </div>
         """,
         unsafe_allow_html=True,
@@ -904,7 +929,7 @@ with tab_docs:
     st.markdown('<div class="story-bridge">Cómo replicar:</div>', unsafe_allow_html=True)
     st.markdown(
         """
-        1. Asegura el archivo **f_dash_with_preds.csv** en la ruta esperada por la app.
+        1. Asegura el archivo **df_dash_with_preds.csv** en la ruta esperada por la app.
         2. Instala dependencias (Streamlit, pandas, numpy, plotly, etc.).
         3. Ejecuta:
         """
@@ -923,5 +948,3 @@ with tab_docs:
         """,
         unsafe_allow_html=True,
     )
-
-    st.markdown('</div>', unsafe_allow_html=True)
