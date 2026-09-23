@@ -61,7 +61,7 @@ _CSS = """
 .rs-legend-row .s{font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
 .rs-note{font-size:12.5px;color:var(--sat-muted);margin:-4px 0 6px 0;line-height:1.45}
 .rs-t{font-weight:700;color:var(--sat-text);font-size:15px}
-.rs-d{font-size:12.8px;color:var(--sat-muted);line-height:1.4;min-height:36px}
+.rs-d{font-size:12.8px;color:var(--sat-muted);line-height:1.4;min-height:54px}
 .rs-mini{background:var(--sat-surface-2);border:1px solid var(--sat-border);border-radius:14px;padding:11px 14px;height:100%}
 .rs-mini .l{font-size:12px;color:var(--sat-muted);font-weight:600}
 .rs-mini .v{font-family:'Space Grotesk','Inter',sans-serif;font-size:24px;font-weight:700;color:var(--sat-text);line-height:1.15}
@@ -292,7 +292,7 @@ def _top_fig(t: pd.DataFrame, col: str, g: float) -> go.Figure:
         fig.add_vline(x=g, line=dict(color=p["text"], width=1.2, dash="dot"), layer="below")
         fig.add_annotation(x=g, y=1, yref="paper", text=f"Promedio {fmt_pct(g)}", showarrow=False, xanchor="left",
                            yanchor="bottom", xshift=4, font=dict(size=11, color=p["muted"]))
-    fig.update_xaxes(range=[0, max(float(t["pct_alto"].max()) * 1.5, 0.02)], tickformat=".0%",
+    fig.update_xaxes(range=[0, max(float(t["pct_alto"].max()) * 1.3, 0.02)], tickformat=".0%",
                      title_text="% de créditos en riesgo Alto")
     fig.update_yaxes(showgrid=False, ticksuffix="  ")
     fig.update_layout(bargap=0.38, margin=dict(l=8, r=8, t=30, b=8))
@@ -512,12 +512,12 @@ else:
     thr = (((load_artifacts() or {}).get("alto") or {}).get("rf") or {}).get("umbral_objetivo") or {}
     with st.container(border=True):
         v1, v2, v3 = st.columns([1, 1, 2.1], gap="medium")
-        v1.markdown(f"<div class='rs-mini'><div class='l'>Recall de Alto · meta DE-03 {fmt_pct(RECALL_ALTO_TARGET, 0)}</div>"
+        v1.markdown(f"<div class='rs-mini'><div class='l'>Recall de Alto · meta {fmt_pct(RECALL_ALTO_TARGET, 0)}</div>"
                     f"<div class='v'>{fmt_pct(rec)}</div><div class='rs-target'><i style='width:"
                     f"{0 if _isnan(rec) else min(rec, 1) * 100:.1f}%'></i><b style='left:{RECALL_ALTO_TARGET * 100:.0f}%'>"
                     f"</b></div><div class='s'>{fmt_int(truth['tp'])} de {fmt_int(truth['real_alto'])} Alto observados "
                     f"anticipados</div></div>", unsafe_allow_html=True)
-        v2.markdown(f"<div class='rs-mini'><div class='l'>Concordancia (accuracy)</div><div class='v'>"
+        v2.markdown(f"<div class='rs-mini'><div class='l'>Concordancia global</div><div class='v'>"
                     f"{fmt_pct(truth['acc'])}</div><div class='s'>Precisión de Alto {fmt_pct(truth['prec'])} · "
                     f"{fmt_int(truth['n'])} créditos con riesgo observado</div></div>", unsafe_allow_html=True)
         with v3:
@@ -539,19 +539,19 @@ section("Siguientes pasos", "Descargue el reporte ejecutivo con los filtros actu
 doc = _report_html(S, [{"label": k["label"], "value": k["value"], "sub": k["sub"]} for k in kpis], F, seg_top, dim_lbl,
                    truth, active_chips(df_all), period_txt, HEADLINE)
 fname = f"reporte_ejecutivo_SAT_{datetime.now():%Y%m%d_%H%M}.html"
-links = [q for q in _LINKS if can_access(q[0])]
-cols = st.columns([1.25] + [1] * len(links), gap="small")
-with cols[0], st.container(border=True):
-    st.markdown("<div class='rs-t'>Reporte ejecutivo (ME-03)</div><div class='rs-d'>HTML autocontenido con KPI, "
-                "hallazgos, top segmentos y filtros. Imprimible a PDF.</div>", unsafe_allow_html=True)
-    b1, b2 = st.columns(2, gap="small")
-    b1.download_button("Descargar", doc.encode("utf-8"), file_name=fname, mime="text/html", icon=":material/download:",
+with st.container(border=True):
+    r1, r2, r3 = st.columns([3, 1, 1], vertical_alignment="center", gap="small")
+    r1.markdown("<div class='rs-t'>📄 Reporte ejecutivo (ME-03)</div><div class='rs-d' style='min-height:0'>HTML "
+                "autocontenido con KPI, hallazgos, top segmentos, filtros y fecha. Se imprime a PDF desde el "
+                "navegador.</div>", unsafe_allow_html=True)
+    r2.download_button("Descargar", doc.encode("utf-8"), file_name=fname, mime="text/html", icon=":material/download:",
                        type="primary", key=f"{P}_report_dl", width="stretch")
-    if b2.button("Vista previa", icon=":material/visibility:", key=f"{P}_report_preview", width="stretch"):
+    if r3.button("Vista previa", icon=":material/visibility:", key=f"{P}_report_preview", width="stretch"):
         _preview_dialog(doc, fname)
-for c_, (k_, ttl, desc) in zip(cols[1:], links):
+links = [q for q in _LINKS if can_access(q[0])]
+for c_, (k_, ttl, desc) in zip(st.columns(4, gap="small"), links):
     with c_, st.container(border=True):
         st.markdown(f"<div class='rs-t'>{esc(ttl)}</div><div class='rs-d'>{esc(desc)}</div>", unsafe_allow_html=True)
-        st.page_link(PAGES[k_][0], label=PAGES[k_][1], icon=PAGES[k_][2], width="stretch")
+        st.page_link(PAGES[k_][0], label="Abrir", icon=PAGES[k_][2], width="stretch")
 
 footer()
