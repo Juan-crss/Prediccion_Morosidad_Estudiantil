@@ -797,7 +797,7 @@ def _css() -> None:
           padding:6px 0;border-bottom:1px dashed var(--sat-border);}
         .fx-side .row:last-child{border-bottom:none;}
         .fx-side .row b{color:var(--sat-text);text-align:right;}
-        .fx-leg{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--sat-muted);margin-top:8px;}
+        .fx-leg{display:flex;gap:6px 12px;flex-wrap:wrap;font-size:11.5px;color:var(--sat-muted);margin-top:8px;}
         .fx-leg span{display:inline-flex;align-items:center;gap:6px;}
         .fx-leg i{display:inline-block;width:12px;height:12px;border-radius:3px;}
         .fx-plan{position:relative;background:var(--sat-surface);border:1px solid var(--sat-border);border-radius:16px;
@@ -1510,7 +1510,8 @@ with pl2:
                                 format="DD/MM/YYYY", key=f"ficha_f_fecha_{ftag}")
         f_canal = f2.selectbox("Canal", CANALES, index=CANALES.index(ROUTE_CANAL.get(route, "Llamada")),
                                key=f"ficha_f_canal_{ftag}")
-        f_res = st.selectbox("Resultado", RESULTADOS, key=f"ficha_f_res_{ftag}")
+        f_res = st.selectbox("Resultado", RESULTADOS, index=None, placeholder="Selecciona el resultado del contacto…",
+                             key=f"ficha_f_res_{ftag}")
         f3, f4 = st.columns(2)
         f_monto = f3.number_input("Monto comprometido (COP)", min_value=0, step=50_000,
                                   value=int(round(float(cuota_ref))) if not _is_na(cuota_ref) else 0,
@@ -1525,7 +1526,9 @@ with pl2:
                                           width="stretch", key="ficha_f_submit")
     if submitted:
         f_comp = bool(f_comp or f_res == RESULTADOS[0])
-        if f_comp and (not f_monto or f_monto <= 0):
+        if not f_res:
+            st.error("Selecciona el resultado de la gestión antes de registrarla.", icon="⚠️")
+        elif f_comp and (not f_monto or f_monto <= 0):
             st.error("Indica el monto del compromiso de pago (mayor que cero) o desmarca el compromiso.", icon="⚠️")
         else:
             entry = {
