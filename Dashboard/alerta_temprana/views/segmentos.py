@@ -683,11 +683,14 @@ def _fair_summary(d: pd.DataFrame, x: pd.DataFrame, attr: str, gmin: int = 100) 
     if len(t) < 2:
         return None
     ref = t.loc[t["n"].idxmax()]
+    if _isnan(ref["pct_pred"]) or ref["pct_pred"] <= 0:
+        return None  # sin alertas en la referencia: la razón no está definida
     t = t.assign(r_pred=t["pct_pred"] / ref["pct_pred"] if ref["pct_pred"] > 0 else np.nan,
                  r_obs=t["pct_obs"] / ref["pct_obs"] if ref["pct_obs"] > 0 else np.nan)
     others = t[t["g"] != ref["g"]]
     out = others[(others["r_pred"] < BAND[0]) | (others["r_pred"] > BAND[1])]
-    far = others.iloc[(others["r_pred"] - 1).abs().argsort()[::-1]].iloc[0] if len(others) else None
+    dev = (others["r_pred"] - 1).abs()
+    far = others.loc[dev.idxmax()] if dev.notna().any() else None
     return {"attr": attr, "ref": ref["g"], "n_groups": len(t), "n_out": len(out), "table": t, "far": far,
             "rmin": float(others["r_pred"].min()), "rmax": float(others["r_pred"].max())}
 

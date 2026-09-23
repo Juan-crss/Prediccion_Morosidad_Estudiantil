@@ -510,13 +510,9 @@ def _fig_peers(pt: pd.DataFrame) -> go.Figure:
                        "Pares con dato: %{customdata[4]}<extra></extra>")))
     fig.add_annotation(x=50, y=1.0, yref="paper", yanchor="bottom", text="Mediana de pares", showarrow=False,
                        font=dict(size=11, color=p["muted"]))
-    fig.add_annotation(x=25, y=1.0, yref="paper", yanchor="bottom", xanchor="left", text="p25", showarrow=False,
-                       font=dict(size=10, color=p["subtle"]))
-    fig.add_annotation(x=75, y=1.0, yref="paper", yanchor="bottom", xanchor="right", text="p75", showarrow=False,
-                       font=dict(size=10, color=p["subtle"]))
     fig.update_xaxes(range=[-3, 103], tickvals=[0, 10, 25, 50, 75, 90, 100],
-                     ticktext=["0", "10", "25", "50", "75", "90", "100"], showgrid=True, gridcolor=p["grid"],
-                     title_text="Percentil del estudiante dentro de sus pares")
+                     ticktext=["0", "p10", "p25", "p50", "p75", "p90", "100"], showgrid=True, gridcolor=p["grid"],
+                     title_text="Percentil dentro de sus pares")
     fig.update_yaxes(showgrid=False, categoryorder="array", categoryarray=labels, automargin=True)
     fig.update_layout(margin=dict(l=8, r=16, t=30, b=8))
     return fig
@@ -525,7 +521,7 @@ def _fig_peers(pt: pd.DataFrame) -> go.Figure:
 def _fig_signals(sig: pd.DataFrame, base: float) -> go.Figure:
     p = pal()
     d = sig.sort_values("lift").reset_index(drop=True)
-    labels = [f"{a} · <b>{esc(v)}</b>" for a, v in zip(d["atributo"], d["valor"])]
+    labels = [f"<span style='font-size:11px'>{esc(a)}</span><br><b>{esc(v)}</b>" for a, v in zip(d["atributo"], d["valor"])]
     x = (d["lift"] - 1) * 100
     colors = []
     for _, r in d.iterrows():
@@ -558,11 +554,9 @@ def _fig_signals(sig: pd.DataFrame, base: float) -> go.Figure:
                            font=dict(size=12, color=p["text"]), align="left")
     fig.add_annotation(x=1.0, xref="paper", xanchor="left", y=1.0, yref="paper", yanchor="bottom", xshift=10,
                        showarrow=False, text="Lift · tasa", font=dict(size=11, color=p["muted"]))
-    fig.add_annotation(x=0, y=1.0, yref="paper", yanchor="bottom", showarrow=False,
-                       text=f"Promedio de la base · {fmt_pct(base)}", font=dict(size=11, color=p["muted"]))
     lim = float(np.nanmax(np.abs(np.r_[(d["lift_hi"] - 1) * 100, (d["lift_lo"] - 1) * 100, 10]))) * 1.12
-    fig.update_xaxes(range=[-lim, lim], ticksuffix=" %", zeroline=False, showgrid=True, gridcolor=p["grid"],
-                     title_text="Diferencia de la tasa de Alto observado frente al promedio de la base")
+    fig.update_xaxes(range=[-lim, lim], ticksuffix=" %", zeroline=False, nticks=5, tickangle=0, showgrid=True, gridcolor=p["grid"],
+                     title_text=f"Diferencia frente al promedio de la base ({fmt_pct(base)})")
     fig.update_yaxes(showgrid=False, automargin=True)
     fig.update_layout(margin=dict(l=8, r=118, t=30, b=8), bargap=0.35)
     return fig
@@ -818,6 +812,7 @@ def _css() -> None:
         .fx-plan .g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px;}
         .fx-plan .g3 > div{background:var(--sat-surface-2);border:1px solid var(--sat-border);border-radius:10px;padding:7px 10px;}
         .fx-plan .g3 .fx-v{font-size:13.5px;}
+        .fx-why{font-size:11.5px;color:var(--sat-muted);margin-top:2px;line-height:1.35;}
         .fx-script{background:var(--sat-surface);border:1px solid var(--sat-border);border-radius:14px;padding:12px 14px;
           box-shadow:var(--sat-shadow);margin-top:10px;}
         .fx-script .t{font-size:12.5px;font-weight:700;color:var(--sat-text);margin-bottom:6px;}
@@ -1312,7 +1307,7 @@ st.dataframe(
     column_config={
         "Aprobación": st.column_config.TextColumn("Aprobación", width=92),
         "Riesgo predicho": st.column_config.TextColumn("Riesgo predicho", width=112),
-        "Riesgo observado": st.column_config.TextColumn("Riesgo observado", width=118),
+        "Riesgo observado": st.column_config.TextColumn("Riesgo observado", width=132),
         "Ruta": st.column_config.TextColumn("Ruta", width=118),
         "Cuotas": st.column_config.NumberColumn("Cuotas", width=64),
         "Analizado": st.column_config.TextColumn("", width=34, help="Crédito analizado en esta ficha"),
@@ -1396,7 +1391,7 @@ else:
     s1, s2 = st.columns([1.75, 1], gap="medium")
     with s1:
         with st.container(border=True):
-            show_fig(_fig_signals(sig, base_rate), key="ficha_senales_fig", height=max(320, 40 * len(sig) + 90),
+            show_fig(_fig_signals(sig, base_rate), key="ficha_senales_fig", height=max(340, 46 * len(sig) + 100),
                      legend=False)
     with s2:
         n_up = int((sig["significativa"] & (sig["lift"] > 1)).sum())
@@ -1482,7 +1477,8 @@ with pl1:
         f"<div class='fx-plan' style='--rc:{_rc(route)};--ri:{_ri(route)}'><div class='hd'><span class='code'>{route}</span>"
         f"<span class='sat-badge neutral'>SLA · {esc(act['sla'])}</span></div><div class='nm'>{esc(act['nombre'])}</div>"
         f"<div class='act'>{esc(act['accion'])}</div><div class='g3'>"
-        f"<div><div class='fx-k'>Fecha límite sugerida</div><div class='fx-v'>{esc(deadline_txt)}</div></div>"
+        f"<div><div class='fx-k'>Fecha límite sugerida</div><div class='fx-v'>{esc(fmt_date(deadline))}</div>"
+        f"<div class='fx-why'>{esc(deadline_txt.split(' · ', 1)[-1])}</div></div>"
         f"<div><div class='fx-k'>Canal sugerido</div><div class='fx-v'>{esc(CANAL_GUION.get(route, ''))}</div></div>"
         f"<div><div class='fx-k'>Responsable</div><div class='fx-v'>{esc(gestor_name)}</div></div></div></div>",
         unsafe_allow_html=True)
@@ -1505,25 +1501,26 @@ with pl2:
     last = logs_student[-1] if logs_student else None
     status_html = (f"Última gestión: <b>{esc(last['fecha_gestion'])}</b> · {esc(last['canal'])} · {esc(last['resultado'])}"
                    if last else "Sin gestiones registradas para este estudiante en la sesión.")
+    ftag = f"{sid}_{sel_llave}"   # claves por estudiante/crédito: los valores por defecto no quedan obsoletos
     with st.form("ficha_form", clear_on_submit=True, border=True):
         st.markdown(f"<div class='fx-status'><b>📝 Registrar gestión</b></div><div class='fx-note'>{status_html}</div>",
                     unsafe_allow_html=True)
         f1, f2 = st.columns(2)
         f_fecha = f1.date_input("Fecha de la gestión", value=today, max_value=today + timedelta(days=1),
-                                format="DD/MM/YYYY", key="ficha_f_fecha")
+                                format="DD/MM/YYYY", key=f"ficha_f_fecha_{ftag}")
         f_canal = f2.selectbox("Canal", CANALES, index=CANALES.index(ROUTE_CANAL.get(route, "Llamada")),
-                               key="ficha_f_canal")
-        f_res = st.selectbox("Resultado", RESULTADOS, key="ficha_f_res")
+                               key=f"ficha_f_canal_{ftag}")
+        f_res = st.selectbox("Resultado", RESULTADOS, key=f"ficha_f_res_{ftag}")
         f3, f4 = st.columns(2)
         f_monto = f3.number_input("Monto comprometido (COP)", min_value=0, step=50_000,
                                   value=int(round(float(cuota_ref))) if not _is_na(cuota_ref) else 0,
-                                  key="ficha_f_monto", help="Solo aplica si hay compromiso de pago.")
+                                  key=f"ficha_f_monto_{ftag}", help="Solo aplica si hay compromiso de pago.")
         f_fcomp = f4.date_input("Fecha del compromiso", value=today + timedelta(days=7), format="DD/MM/YYYY",
-                                key="ficha_f_fcomp")
-        f_comp = st.checkbox("El estudiante asumió un compromiso de pago", key="ficha_f_comp",
+                                key=f"ficha_f_fcomp_{ftag}")
+        f_comp = st.checkbox("El estudiante asumió un compromiso de pago", key=f"ficha_f_comp_{ftag}",
                              help="Se marca automáticamente si el resultado es «con compromiso de pago».")
         f_notas = st.text_area("Notas", placeholder="Resumen de la conversación, acuerdos y próximos pasos…",
-                               max_chars=600, key="ficha_f_notas", height=92)
+                               max_chars=600, key=f"ficha_f_notas_{ftag}", height=92)
         submitted = st.form_submit_button("Registrar gestión", type="primary", icon=":material/add_task:",
                                           width="stretch", key="ficha_f_submit")
     if submitted:
