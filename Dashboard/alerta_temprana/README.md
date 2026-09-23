@@ -30,11 +30,11 @@ python -c "import hashlib; print(hashlib.sha256(b'mi-clave').hexdigest())"
 | Rol | Páginas |
 |---|---|
 | `admin` | Todas |
-| `cartera` | Resumen, Cola de gestión, Ficha 360°, Segmentos, Mapa, Carga y predicción, Simulador, Metodología |
-| `direccion` | Resumen, Segmentos, Mapa, Desempeño del modelo, Monitoreo, Metodología |
-| `analitica` | Resumen, Segmentos, Mapa, Desempeño del modelo, Monitoreo, Carga y predicción, Simulador, Metodología |
+| `cartera` | Resumen, Cola de gestión, Segmentos y territorio, Cargar y predecir |
+| `direccion` | Resumen, Segmentos y territorio, Desempeño del modelo |
+| `analitica` | Resumen, Segmentos y territorio, Desempeño del modelo, Cargar y predecir |
 
-### Motor de predicción (carga de CSV y simulador)
+### Motor de predicción (carga de CSV)
 
 El tablero elige automáticamente, en este orden:
 
@@ -43,23 +43,17 @@ El tablero elige automáticamente, en este orden:
 2. **Modelo local** (paquete `Despliegue/model_morosidad-0.0.1-py3-none-any.whl`): además de la clase entrega las
    probabilidades por clase. Requiere Python 3.10/3.11 y ~550 MB de RAM:
    `pip install -r Dashboard/alerta_temprana/requirements-model.txt`.
-3. **Sin motor**: se aceptan CSV que ya traigan `y_pred`, y el simulador usa una estimación empírica por casos similares
-   (rotulada como tal).
+3. **Sin motor**: se aceptan CSV que ya traigan `y_pred`.
 
 ## Páginas
 
 | Página | Qué resuelve | Requerimientos |
 |---|---|---|
 | Resumen ejecutivo | KPI exigidos, evolución del riesgo, segmentos críticos, hallazgos automáticos y reporte descargable | DB-03, ME-03 |
-| Cola de gestión | Índice de prioridad con pesos editables, rutas R1–R4, capacidad, reparto por gestor, escenario de recaudo, archivo de integración | DB-02, DB-04 |
-| Ficha 360° | Perfil anonimizado, riesgo, créditos, comparación con pares, señales del perfil, bitácora de gestión | DB-02 |
-| Segmentos y perfiles | Explorador de segmentos con IC de Wilson, heatmaps, treemap, scoring externo, auditoría de equidad | Enfoque descriptivo |
-| Mapa de riesgo | Mapa por ciudad (DIVIPOLA), ranking de departamentos, territorios prioritarios | Enfoque descriptivo |
-| Desempeño del modelo | Comparación de 5 modelos, reporte por clase, ROC/PR, umbral de alerta para Alto, importancia de variables, ficha del modelo | MO-02, EV-02, DE-03, MO-03 |
-| Monitoreo y calidad | AUC por semestre y disparador de reentrenamiento, deriva (PSI), reglas de calidad automáticas y casos a remediar | ME-01, ME-02, DA-02 |
-| Metodología y trazabilidad | Arquitectura, etapas, variable objetivo, matriz de requerimientos, plan de implementación, ética | — |
+| Cola de gestión | Índice de prioridad con pesos editables, rutas R1–R4, curva de cobertura por capacidad, archivo de integración | DB-02, DB-04 |
+| Segmentos y territorio | Explorador de segmentos con IC de Wilson, perfil de riesgo por scoring y tipo de interés, mapa por ciudad | Enfoque descriptivo |
+| Desempeño del modelo | Comparación de 5 modelos, reporte por clase, umbral de alerta para Alto, importancia de variables | MO-02, EV-02, DE-03, MO-03 |
 | Cargar y predecir | Plantilla, validación de esquema y calidad, predicción con API o modelo local, uso en todo el tablero | DE-01, ME-02 |
-| Simulador what-if | Escenarios sobre un crédito, sensibilidad de P(Alto), comparación de escenarios | — |
 
 Los **filtros globales** (DB-01) de la barra lateral persisten entre páginas y pueden fijarse en la URL para
 compartir una vista.
@@ -80,7 +74,7 @@ Dashboard/alerta_temprana/
 │   ├── engine.py          # motor de predicción: API → modelo local
 │   ├── auth.py            # login por roles con st.secrets
 │   └── nav.py             # registro de páginas y navegación
-├── views/                 # una página por archivo
+├── views/                 # una página por archivo (5 páginas)
 ├── data/                  # model_artifacts.json, feature_importance.json
 ├── tools/                 # scripts para regenerar artefactos
 └── tests/                 # pruebas unitarias y de humo (AppTest)

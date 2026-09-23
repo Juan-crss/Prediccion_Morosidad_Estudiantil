@@ -105,9 +105,9 @@ def login_screen() -> None:
             )
             desc = {
                 "admin": "Acceso completo, incluida la configuración y la carga de datos.",
-                "cartera": "Cola de gestión, ficha 360, simulador y carga de archivos.",
-                "direccion": "Resumen ejecutivo, segmentos, desempeño y monitoreo del modelo.",
-                "analitica": "Desempeño, monitoreo, calidad de datos, carga y simulador.",
+                "cartera": "Resumen, cola de gestión, segmentos y carga de archivos.",
+                "direccion": "Resumen ejecutivo, segmentos y desempeño del modelo.",
+                "analitica": "Resumen, segmentos, desempeño del modelo y carga de archivos.",
             }
             role = st.radio("Rol", list(ROLES), format_func=lambda r: ROLES[r], captions=[desc[r] for r in ROLES],
                             index=0, key="demo_role")
