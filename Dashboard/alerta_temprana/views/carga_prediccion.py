@@ -404,7 +404,7 @@ if result is not None:
     ])
     g1, g2 = st.columns(2)
     with g1, st.container(border=True):
-        st.markdown("**Distribución del riesgo predicho** · qué parte del archivo requiere gestión")
+        st.markdown("**Riesgo predicho** · qué parte del archivo requiere gestión")
         fig = go.Figure(go.Bar(
             y=RISK_ORDER, x=cnt.values, orientation="h", marker_color=[RISK_COLORS[r] for r in RISK_ORDER],
             text=[f"{fmt_int(v)} · {fmt_pct(v / max(ns, 1))}" for v in cnt.values], textposition="auto",
@@ -412,7 +412,7 @@ if result is not None:
         fig.update_layout(yaxis=dict(autorange="reversed", title=None), xaxis_title="Créditos")
         show_fig(fig, key=f"{P}_dist", height=300, legend=False)
     with g2, st.container(border=True):
-        st.markdown("**Rutas de gestión asignadas** · carga de trabajo por ruta y SLA")
+        st.markdown("**Rutas de gestión** · carga de trabajo por ruta y SLA")
         rc = scored["ruta"].value_counts().reindex(list(ACTION_ROUTES), fill_value=0)
         names = [f"{r} · {ACTION_ROUTES[r]['nombre']}" for r in rc.index]
         fig = go.Figure(go.Bar(
@@ -443,6 +443,8 @@ if result is not None:
             "cuotas", "mora_txt"]
     table = scored.sort_values("prioridad", ascending=False)[cols].copy()
     table["y_pred"] = table["y_pred"].astype(str)
+    if table["proba_pred"].isna().all():
+        table = table.drop(columns="proba_pred")
     table["ruta"] = table["ruta"].map(lambda r: f"{r} · {ACTION_ROUTES[r]['nombre']}")
     st.dataframe(
         table, hide_index=True, width="stretch", height=380,
@@ -461,7 +463,7 @@ if result is not None:
     download_bar(export, f"predicciones_{ss['carga_name'].rsplit('.', 1)[0]}", key=f"{P}_dl", label="Descargar")
 
     with st.container(border=True):
-        a1, a2 = st.columns([3, 1.2], vertical_alignment="center")
+        a1, a2 = st.columns([2.2, 1.3], vertical_alignment="center")
         with a1:
             if ss.get("carga_applied"):
                 st.markdown(f"✅ **{esc(ss['carga_name'])}** es ahora el dataset activo: Resumen, Cola de gestión, "
