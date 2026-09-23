@@ -161,9 +161,9 @@ with tab1:
                             textposition="outside", cliponaxis=False,
                             customdata=[_n(v) for v in vals],
                             hovertemplate="%{x}<br>" + lab + ": %{customdata}<extra></extra>")
-            fig.add_hline(y=RECALL_ALTO_TARGET, line_dash="dash", line_color=RISK_COLORS["Alto"],
-                          annotation_text="Meta recall Alto 0,75", annotation_position="top left",
-                          annotation_font_color=RISK_COLORS["Alto"])
+            fig.add_scatter(x=[names[0], names[-1]], y=[RECALL_ALTO_TARGET] * 2, mode="lines",
+                            name="Meta recall Alto 0,75", hoverinfo="skip",
+                            line=dict(color=RISK_COLORS["Alto"], dash="dash", width=1.5))
             fig.update_layout(barmode="group", bargap=0.25, yaxis=dict(title="Valor de la métrica", range=[0, 1.05]),
                               xaxis_title=None)
             show_fig(fig, key=f"{P}_cmp_bars", height=380)
@@ -267,6 +267,8 @@ with tab3:
         st.info("No hay barrido de umbrales para este modelo en los artefactos.", icon="ℹ️")
     else:
         sw = pd.DataFrame(alto["barrido"])
+        sw_plot = sw.copy()  # con < 30 alertas la precisión es ruido: se oculta en la curva
+        sw_plot.loc[sw_plot["alertas"] < 30, ["precision", "f1"]] = np.nan
         obj = alto.get("umbral_objetivo") or {}
         best_f1 = alto.get("umbral_f1") or {}
         argmax = alto.get("regla_argmax") or {}
@@ -288,7 +290,7 @@ with tab3:
                      f"{fmt_int(alto['n'])} créditos", tone="accent", bar=row["pct_alertas"]),
         ])
 
-        c1, c2 = st.columns([1.7, 1], gap="medium")
+        c1, c2 = st.columns([1.5, 1.1], gap="medium")
         with c1:
             with st.container(border=True):
                 st.markdown("<div class='md-note'>Al bajar el umbral sube el recall (se detectan más Alto) pero cae "
@@ -299,9 +301,9 @@ with tab3:
                                               ("precision", "Precisión Alto", p["text"], "solid"),
                                               ("f1", "F1 Alto", "#3E63DD", "dot"),
                                               ("pct_alertas", "% cartera alertada", "#F5A524", "dash")]:
-                    fig.add_scatter(x=sw["umbral"], y=sw[col], mode="lines", name=lab,
+                    fig.add_scatter(x=sw_plot["umbral"], y=sw_plot[col], mode="lines", name=lab,
                                     line=dict(color=color, width=2.4, dash=dash),
-                                    customdata=[fmt_pct(v) if col == "pct_alertas" else _n(v) for v in sw[col]],
+                                    customdata=[fmt_pct(v) if col == "pct_alertas" else _n(v) for v in sw_plot[col]],
                                     hovertemplate="Umbral %{x:.2f}<br>" + lab + ": %{customdata}<extra></extra>")
                 fig.add_hline(y=RECALL_ALTO_TARGET, line_dash="dash", line_color=RISK_COLORS["Alto"], line_width=1,
                               annotation_text="Meta 0,75", annotation_position="top right",
@@ -317,13 +319,13 @@ with tab3:
         with c2:
             cmp_rows = [
                 ("Regla argmax", argmax.get("recall"), argmax.get("precision"), argmax.get("pct_alertas")),
-                (f"Umbral {_n(row['umbral'], 2)} (elegido)", row["recall"], row["precision"], row["pct_alertas"]),
+                (f"Elegido ({_n(row['umbral'], 2)})", row["recall"], row["precision"], row["pct_alertas"]),
             ]
             if best_f1:
                 cmp_rows.append((f"Máx. F1 ({_n(best_f1['umbral'], 2)})", best_f1["recall"], best_f1["precision"],
                                  best_f1["pct_alertas"]))
             cdf = pd.DataFrame([(r, _n(a), _n(b), fmt_pct(c)) for r, a, b, c in cmp_rows],
-                               columns=["Regla", "Recall Alto", "Precisión", "% cartera"])
+                               columns=["Regla", "Recall", "Precisión", "% cartera"])
             st.dataframe(cdf, hide_index=True, width="stretch")
             st.markdown(insight(
                 "Argmax subdetecta Alto",
