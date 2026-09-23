@@ -40,12 +40,8 @@ SEQ_RISK = ["#FFF9DB", "#FFE27A", "#FFC23D", "#F5873A", "#E5484D", "#9E1C22"]
 
 
 def theme_mode() -> str:
-    """'light' o 'dark' según el tema activo de Streamlit (st.context.theme)."""
-    try:
-        t = st.context.theme.type
-        return "dark" if t == "dark" else "light"
-    except Exception:
-        return "light"
+    """Tema activo. El tablero está fijado en modo claro (``base = "light"`` en .streamlit/config.toml)."""
+    return "light"
 
 
 def pal() -> dict:
