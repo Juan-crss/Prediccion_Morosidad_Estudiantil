@@ -1,0 +1,44 @@
+# Tema institucional (negro · amarillo Uniandes · blanco) para el SAT.
+# Streamlit lee este archivo desde el directorio donde se ejecuta `streamlit run`
+# (la raíz del repositorio, también en Streamlit Community Cloud).
+
+[client]
+toolbarMode = "viewer"
+
+[server]
+maxUploadSize = 200
+
+[theme]
+font = "Inter, 'Source Sans Pro', 'Segoe UI', sans-serif"
+headingFont = "'Space Grotesk', Inter, 'Source Sans Pro', sans-serif"
+baseRadius = "0.75rem"
+buttonRadius = "0.65rem"
+showSidebarBorder = true
+
+[theme.light]
+primaryColor = "#141414"
+backgroundColor = "#F6F6F3"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#141414"
+linkColor = "#8A6A00"
+borderColor = "#E3E1DA"
+dataframeHeaderBackgroundColor = "#F1EFE8"
+chartCategoricalColors = ["#141414", "#FFD100", "#3E63DD", "#30A46C", "#E5484D", "#8E4EC6", "#F5A524", "#12A594"]
+
+[theme.light.sidebar]
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6F6F3"
+
+[theme.dark]
+primaryColor = "#FFD100"
+backgroundColor = "#0E1117"
+secondaryBackgroundColor = "#161A22"
+textColor = "#F2F2EE"
+linkColor = "#FFD100"
+borderColor = "#2A303C"
+dataframeHeaderBackgroundColor = "#1B202A"
+chartCategoricalColors = ["#F2F2EE", "#FFD100", "#7C9CFF", "#46C487", "#FF6B70", "#B083F0", "#FFB547", "#2BC4B4"]
+
+[theme.dark.sidebar]
+backgroundColor = "#11151C"
+secondaryBackgroundColor = "#161A22"
