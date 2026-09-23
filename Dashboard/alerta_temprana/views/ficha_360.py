@@ -986,9 +986,16 @@ with st.container():
                          width="stretch")
 
 if force_id == sid:
-    st.markdown("<div class='fx-banner'><span class='tag'>Desde la cola</span><div>Este estudiante llegó desde la "
-                "<b>Cola de gestión</b> pero no cumple los filtros actuales de la barra lateral; se muestra igualmente "
-                "para no perder el caso.</div></div>", unsafe_allow_html=True)
+    fb1, fb2 = st.columns([4.2, 1.3], vertical_alignment="center", gap="small")
+    with fb1:
+        st.markdown("<div class='fx-banner'><span class='tag'>Desde la cola</span><div>Este estudiante llegó desde la "
+                    "<b>Cola de gestión</b> pero no cumple los filtros actuales de la barra lateral; se muestra "
+                    "igualmente para no perder el caso.</div></div>", unsafe_allow_html=True)
+    with fb2:
+        in_filter = [i for i in ids if i != force_id]
+        st.button("Ir al #1 del filtro", icon=":material/first_page:", key="ficha_first", width="stretch",
+                  on_click=_goto_first, args=(in_filter,), disabled=not in_filter,
+                  help="Abre el estudiante de mayor prioridad que sí cumple los filtros actuales.")
 
 rec = credits.loc[credits["llave2"].astype(str) == str(sel_llave)].iloc[0]
 rec_df = credits.loc[credits["llave2"].astype(str) == str(sel_llave)]
@@ -1315,7 +1322,6 @@ _anchor_section("ficha-pares", "Comparación con sus pares",
                 "atípicos (≤ p10 o ≥ p90).", "Paso 3 · Pares")
 g1, g2 = st.columns([2.2, 1], vertical_alignment="center")
 with g1:
-    ss.setdefault("_ficha_pares_pref", None)
     choice = st.segmented_control(
         "Grupo de pares", peer_opts, key="ficha_pares", default=peer_group, required=True,
         format_func=lambda g: f"{g} · {fmt_int(peer_counts[g])}",
@@ -1345,8 +1351,6 @@ else:
             rows += (f"<div class='row'><span>{esc(r['metrica'])}</span><b>{_nb(_fmt_metric(r['valor'], r['kind']))} "
                      f"<span style='color:var(--sat-muted);font-weight:500'>vs</span> "
                      f"{_nb(_fmt_metric(r['mediana'], r['kind']))}{dv_txt}</b></div>")
-        pr = segment_alto = None
-        pr_html = ""
         if peers["has_truth"].any():
             pa_obs = float((peers.loc[peers["has_truth"], "y_true"].astype(str) == "Alto").mean())
             pa_pred = float((peers["y_pred"].astype(str) == "Alto").mean())
