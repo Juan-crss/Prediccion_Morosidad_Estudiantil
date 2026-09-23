@@ -124,10 +124,35 @@ _CSS = """
 .rs-route-m{font-size:13px;color:var(--sat-text);font-weight:700;margin-top:4px}
 .rs-link-t{font-weight:700;color:var(--sat-text);font-size:15px}
 .rs-link-d{font-size:12.8px;color:var(--sat-muted);line-height:1.4;min-height:54px}
+.rs-head{display:flex;gap:14px;align-items:flex-start;background:var(--sat-surface);border:1px solid var(--sat-border);
+  border-radius:var(--sat-radius);padding:16px 20px;box-shadow:var(--sat-shadow);margin-bottom:0;position:relative;overflow:hidden}
+.rs-head:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--sat-accent)}
+.rs-head .q{font-family:'Space Grotesk',sans-serif;font-size:40px;line-height:.8;color:var(--sat-accent);font-weight:700;
+  -webkit-text-stroke:1px color-mix(in srgb,var(--sat-text) 25%,transparent)}
+.rs-head .k{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--sat-muted);margin-bottom:3px}
+.rs-head .t{font-size:15px;color:var(--sat-text);line-height:1.55}
+/* Streamlit compensa el margen de <p> con margin-bottom:-1rem; las tarjetas HTML no tienen <p> y se solaparían */
+[data-testid="stMain"] [data-testid="stMarkdownContainer"]:has(> [class^="rs-"], > .sat-insight){margin-bottom:0}
 .rs-kpi .sat-kpi .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rs-kpi .sat-kpi .val{white-space:nowrap}
-.rs-kpi .sat-kpi .sub{min-height:34px}
+.rs-kpi .sat-kpi .sub{min-height:38px;line-height:1.5}
 .rs-kpi .sat-kpi .delta{white-space:nowrap}
+/* ---- Adaptación a pantallas estrechas (barra lateral abierta en portátiles / tabletas) ---- */
+@media (max-width:1180px){
+  [data-testid="stMain"] [data-testid="stColumn"]{min-width:calc(50% - 16px)}
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stPlotlyChart"]) > [data-testid="stColumn"],
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"]:has(.rs-seg) > [data-testid="stColumn"]{min-width:100%}
+  [data-testid="stMain"] [data-testid="stButtonGroup"] div:has(> button){flex-wrap:wrap;row-gap:6px}
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"]{row-gap:14px}
+}
+@media (max-width:1000px){
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"]:has(.sat-insight) > [data-testid="stColumn"],
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"]:has(.rs-risk) > [data-testid="stColumn"],
+  [data-testid="stMain"] [data-testid="stHorizontalBlock"]:has([data-testid="stButtonGroup"]) > [data-testid="stColumn"]{min-width:100%}
+  .rs-kpi .sat-kpi .val{font-size:24px}
+  .rs-route-a{min-height:0}
+  [data-testid="stMain"] [data-testid="stPageLink"] *{white-space:normal !important;text-overflow:clip !important}
+}
 </style>
 """
 
@@ -287,6 +312,38 @@ def _compare(d: pd.DataFrame, mask_a, mask_b) -> dict:
 
 def _x(v, decimals: int = 1) -> str:
     return "—" if _isnan(v) else f"{fmt_num(v, decimals)}×"
+
+
+def _truth(d: pd.DataFrame) -> dict | None:
+    """Concordancia entre riesgo predicho y observado (None si el dataset no trae y_true)."""
+    t = d[d["has_truth"] & d["y_pred"].notna()]
+    if t.empty:
+        return None
+    cm = confusion(t["y_true"], t["y_pred"])
+    tp = int(cm[0, 0])
+    real_alto, pred_alto = int(cm[0].sum()), int(cm[:, 0].sum())
+    return {"cm": cm, "n": int(cm.sum()), "ok": int(np.trace(cm)), "acc": _div(np.trace(cm), cm.sum()),
+            "rec": _div(tp, real_alto), "prec": _div(tp, pred_alto), "tp": tp, "real_alto": real_alto,
+            "pred_alto": pred_alto}
+
+
+def _headline(s: dict, rec_s: dict | None, prev_s: dict | None, n_months: int, truth: dict | None) -> str:
+    """Titular ejecutivo redactado con las cifras del filtro actual."""
+    txt = (f"De <b>{fmt_int(s['n'])}</b> créditos filtrados, <b>{fmt_int(s['n_Alto'])} ({fmt_pct(s['pct_alto'])}) están "
+           f"en riesgo Alto</b> y comprometen <b>{fmt_cop(s['monto_Alto'])}</b> ({fmt_pct(s['pct_monto_alto'])} del monto "
+           f"financiado). La mora real reportada por Datacrédito es {fmt_pct(s['pct_mora'])}.")
+    if rec_s and prev_s and not _isnan(rec_s["pct_alto"]) and not _isnan(prev_s["pct_alto"]):
+        d = rec_s["pct_alto"] - prev_s["pct_alto"]
+        if abs(d) >= 0.0005:
+            verbo = "subió" if d > 0 else "bajó"
+            txt += (f" En los últimos {n_months} meses el % en Alto <b>{verbo} {fmt_num(abs(d) * 100, 1)} pp</b> "
+                    f"({fmt_pct(prev_s['pct_alto'])} → {fmt_pct(rec_s['pct_alto'])}).")
+        else:
+            txt += f" El % en Alto se mantiene estable frente a los {n_months} meses previos."
+    if truth and not _isnan(truth["rec"]) and truth["rec"] < RECALL_ALTO_TARGET:
+        txt += (f" Ojo: la regla actual anticipa solo {fmt_pct(truth['rec'])} de los Alto observados; el umbral debe "
+                f"ajustarse para cumplir DE-03.")
+    return txt
 
 
 # ======================================================================================
@@ -545,7 +602,7 @@ def _top_fig(tab: pd.DataFrame, col: str, global_alto: float) -> go.Figure:
         fig.add_annotation(x=global_alto, y=1, yref="paper", text=f"Promedio {fmt_pct(global_alto)}", showarrow=False,
                            xanchor="left", yanchor="bottom", xshift=4, font=dict(size=11, color=p["muted"]))
     xmax = float(t["pct_alto"].max()) if len(t) else 0.1
-    fig.update_xaxes(range=[0, max(xmax * 1.42, 0.02)], tickformat=".0%", title_text="% de créditos en riesgo Alto")
+    fig.update_xaxes(range=[0, max(xmax * 1.5, 0.02)], tickformat=".0%", title_text="% de créditos en riesgo Alto")
     fig.update_yaxes(showgrid=False, ticksuffix="  ")
     fig.update_layout(bargap=0.38, margin=dict(l=8, r=8, t=30, b=8), clickmode="event+select")
     return fig
@@ -667,16 +724,22 @@ def _report_html(r: dict) -> str:
         f"<td>{fmt_pct(_div(s[f'monto_{x}'], s['monto']))}</td><td>{fmt_pct(s[f'mora_{x}'])}</td></tr>" for x in RISK_ORDER)
     # mini gráfico de % Alto por mes (SVG)
     m = r["monthly"].tail(18)
-    svg = ""
+    svg, peak_txt = "", ""
     if len(m) >= 2:
+        pk = int(np.argmax(m["alto"].to_numpy()))
+        peak_txt = (f"Últimos {len(m)} meses del filtro; la barra resaltada es el pico "
+                    f"({esc(fmt_period(m['periodo'].iloc[pk]))}, {fmt_pct(m['alto'].iloc[pk])}).")
         mx = max(float(m["alto"].max()), 0.01)
+        imax = int(np.argmax(m["alto"].to_numpy()))
         bw = 560 / len(m)
         cols = []
         for i, (_, row) in enumerate(m.iterrows()):
-            h = row["alto"] / mx * 110
+            h = row["alto"] / mx * 100
             cols.append(f"<rect x='{i * bw + 3:.1f}' y='{130 - h:.1f}' width='{bw - 6:.1f}' height='{h:.1f}' rx='3' "
-                        f"fill='{RISK_COLORS['Alto']}' fill-opacity='{0.45 if i < len(m) - 1 else 0.95}'>"
+                        f"fill='{RISK_COLORS['Alto']}' fill-opacity='{0.95 if i == imax else 0.45}'>"
                         f"<title>{esc(fmt_period(row['periodo']))}: {fmt_pct(row['alto'])}</title></rect>")
+        cols.append(f"<text x='{imax * bw + bw / 2:.1f}' y='{130 - 100 - 6}' font-size='11' font-weight='700' "
+                    f"fill='#141414' text-anchor='middle'>{fmt_pct(m['alto'].iloc[imax])}</text>")
         svg = (f"<svg viewBox='0 0 560 150' width='100%' height='150' role='img' aria-label='% en Alto por mes'>"
                f"{''.join(cols)}<line x1='0' x2='560' y1='130.5' y2='130.5' stroke='#D9D6CC'/>"
                f"<text x='0' y='146' font-size='11' fill='#6B6A64'>{esc(fmt_period(m['periodo'].iloc[0]))}</text>"
@@ -684,7 +747,7 @@ def _report_html(r: dict) -> str:
                f" · {fmt_pct(m['alto'].iloc[-1])}</text></svg>")
     seg_rows = "".join(
         f"<tr><td>{esc(_seg_label(r['dim_col'], row['segmento']))}</td><td>{fmt_int(row['creditos'])}</td>"
-        f"<td>{fmt_int(row['n_alto'])}</td><td><b>{fmt_pct(row['pct_alto'])}</b></td><td>{_x(row['lift'])}</td>"
+        f"<td>{fmt_int(row['n_alto'])}</td><td><b>{fmt_pct(row['pct_alto'])}</b></td><td>{_x(row['lift'], 2)}</td>"
         f"<td>{fmt_cop(row['exposicion_alto'])}</td><td>{fmt_pct(row['pct_mora'])}</td></tr>"
         for _, row in r["top"].iterrows()) or "<tr><td colspan='7'>Sin segmentos con el n mínimo.</td></tr>"
     finds = "".join(f"<div class='f {f['tone']}'><div class='ft'>{esc(f['icon'])} {esc(f['title'])}</div>"
@@ -715,7 +778,7 @@ h1{{font-size:26px;margin:6px 0 4px}} .hero p{{margin:0;color:#CFCFC6}}
 .chips{{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}} .chips span{{font-size:11.5px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.16)}}
 .chips span.hl{{background:#FFD100;color:#141414;border-color:#FFD100;font-weight:700}}
 h2{{font-size:17px;margin:26px 0 10px;display:flex;align-items:center;gap:8px}} h2:before{{content:"";width:16px;height:3px;border-radius:3px;background:#FFD100}}
-.kg{{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}}
+.kg{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}}
 .k{{background:#fff;border:1px solid #E7E5DF;border-radius:14px;padding:12px 14px}} .kl{{font-size:11.5px;color:#6B6A64;font-weight:600}}
 .kv{{font-size:22px;font-weight:800;margin-top:4px}} .ks{{font-size:11.5px;color:#6B6A64}}
 .kd{{display:inline-block;margin-top:6px;font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:#F1EFE8;color:#6B6A64}}
@@ -730,7 +793,8 @@ td:not(:first-child),th:not(:first-child){{text-align:right}} .rt td:last-child{
 .fg{{display:grid;grid-template-columns:1fr 1fr;gap:10px}} .f{{background:#fff;border:1px solid #E7E5DF;border-left:4px solid #FFD100;border-radius:12px;padding:11px 13px}}
 .f.alto{{border-left-color:#E5484D}} .f.medio{{border-left-color:#F5A524}} .f.bajo{{border-left-color:#30A46C}} .f.info{{border-left-color:#3E63DD}}
 .ft{{font-weight:700;margin-bottom:3px}} .fx{{color:#44433E;font-size:13px}}
-.muted{{color:#6B6A64;font-size:12px}} .foot{{margin-top:28px;padding-top:12px;border-top:1px solid #E7E5DF;color:#9A988F;font-size:11.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}}
+.muted{{color:#6B6A64;font-size:12px}} .head{{margin-top:16px;background:#fff;border:1px solid #E7E5DF;border-left:5px solid #FFD100;border-radius:14px;padding:13px 16px;font-size:14.5px}}
+.head .ft{{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#6B6A64}} .foot{{margin-top:28px;padding-top:12px;border-top:1px solid #E7E5DF;color:#9A988F;font-size:11.5px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}}
 @media (max-width:760px){{.kg{{grid-template-columns:repeat(2,1fr)}} .two,.fg{{grid-template-columns:1fr}}}}
 @media print{{body{{background:#fff}} .w{{padding:0}} .hero{{-webkit-print-color-adjust:exact;print-color-adjust:exact}} .k,.f,table,.card{{break-inside:avoid}}}}
 </style></head><body><div class="w">
@@ -741,6 +805,8 @@ td:not(:first-child),th:not(:first-child){{text-align:right}} .rt td:last-child{
 <span>Fuente: {esc(r['source'])}</span><span>{esc(r['period'])}</span></div>
 <div class="chips">{chips}</div></div>
 
+<div class="head"><div class="ft">En síntesis</div>{r['headline']}</div>
+
 <h2>Indicadores clave (DB-03)</h2>
 <div class="kg">{kpis}</div>
 <p class="muted">Tendencias: {esc(r['window'])}.</p>
@@ -749,7 +815,7 @@ td:not(:first-child),th:not(:first-child){{text-align:right}} .rt td:last-child{
 <div class="two"><div><div class="bar">{bar}</div>
 <table><tr><th>Riesgo</th><th>Créditos</th><th>%</th><th>Monto</th><th>% monto</th><th>Mora DC</th></tr>{risk_rows}</table></div>
 <div class="card"><div class="ft">% de créditos en Alto por mes de aprobación</div>{svg or '<p class="muted">Sin serie mensual.</p>'}
-<div class="muted">La barra más oscura es el último mes del filtro.</div></div></div>
+<div class="muted">{peak_txt}</div></div></div>
 
 <h2>Hallazgos automáticos</h2>
 <div class="fg">{finds}</div>
@@ -891,14 +957,16 @@ for c_, r in zip(rc, RISK_ORDER):
 # ---------- Hallazgos automáticos ----------
 min_n = int(st.session_state.get(f"{P}_minn", 30) or 30)
 F = _findings(dff, S, min_n)
+truth = _truth(dff)
+HEADLINE = _headline(S, rec_s, prev_s, N, truth)
 section("Hallazgos automáticos", "Se recalculan con cada cambio de filtro; las cifras corresponden a la cartera "
         "filtrada.", kicker="Lectura ejecutiva")
+st.markdown(f"<div class='rs-head'><div class='q'>“</div><div><div class='k'>En síntesis</div>"
+            f"<div class='t'>{HEADLINE}</div></div></div>", unsafe_allow_html=True)
 for i in range(0, len(F), 2):
     cc = st.columns(2, gap="small")
     for c_, f in zip(cc, F[i:i + 2]):
         c_.markdown(insight(f["title"], f["html"], tone=f["tone"], icon=f["icon"]), unsafe_allow_html=True)
-    if i + 2 < len(F):
-        st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
 
 # ---------- Dinámica: evolución + dona ----------
 section("Evolución de la cartera por riesgo predicho", "Volumen aprobado por periodo y proporción en riesgo Alto. "
@@ -1003,7 +1071,8 @@ with st.container(border=True):
             if can_access("segmentos"):
                 st.page_link(PAGES["segmentos"][0], label="Profundizar en Segmentos y perfiles",
                              icon=":material/arrow_forward:")
-        with st.expander(f"Tabla completa · {fmt_int(len(seg_all))} segmentos de {dim_lbl.lower()} con n ≥ {fmt_int(min_n)}"):
+        with st.expander(f"Tabla completa y exportación · {fmt_int(len(seg_all))} grupos por {dim_lbl.lower()} "
+                         f"con n ≥ {fmt_int(min_n)}", icon=":material/table_view:"):
             tbl = pd.DataFrame({
                 dim_lbl: [_seg_label(dim_col, v) for v in seg_all["segmento"]],
                 "Créditos": seg_all["creditos"].astype(int),
@@ -1020,7 +1089,10 @@ with st.container(border=True):
             st.dataframe(tbl, hide_index=True, width="stretch", height=min(420, 38 + 35 * len(tbl)), column_config={
                 "% Alto": st.column_config.ProgressColumn("% Alto", format="%.1f %%", min_value=0,
                                                           max_value=max(vmax, 1)),
-                "Lift": st.column_config.NumberColumn("Lift", format="%.2f×"),
+                "Lift": st.column_config.NumberColumn("Lift", format="%.2f×", width="small"),
+                "Créditos": st.column_config.NumberColumn(width="small"),
+                "Estudiantes": st.column_config.NumberColumn(width="small"),
+                "En Alto": st.column_config.NumberColumn(width="small"),
                 "% Alto observado": st.column_config.NumberColumn(format="%.1f %%"),
                 "% mora Datacrédito": st.column_config.NumberColumn(format="%.1f %%"),
                 "Monto (M COP)": st.column_config.NumberColumn(format="$ %.1f M"),
@@ -1031,21 +1103,14 @@ with st.container(border=True):
 # ---------- Predicho vs observado ----------
 section("Predicho vs. observado", "Qué tanto coincide la clasificación del modelo con el riesgo observado en la "
         "cartera filtrada.", kicker="Confiabilidad")
-truth = None
-tdf = dff[dff["has_truth"] & dff["y_pred"].notna()]
-if tdf.empty:
+if truth is None:
     st.markdown(insight("Sin riesgo observado en el dataset activo",
                         "El archivo cargado no trae la columna <b>y_true</b>: la concordancia no se puede calcular. "
                         "Los KPI y gráficas anteriores usan solo el riesgo predicho.", tone="info", icon="ℹ️"),
                 unsafe_allow_html=True)
 else:
-    cm = confusion(tdf["y_true"], tdf["y_pred"])
-    tp = int(cm[0, 0])
-    real_alto, pred_alto = int(cm[0].sum()), int(cm[:, 0].sum())
-    acc = _div(np.trace(cm), cm.sum())
-    rec = _div(tp, real_alto)
-    prec = _div(tp, pred_alto)
-    truth = {"n": int(cm.sum()), "acc": acc, "rec": rec, "prec": prec, "tp": tp, "real_alto": real_alto}
+    cm, tp, real_alto, pred_alto = truth["cm"], truth["tp"], truth["real_alto"], truth["pred_alto"]
+    acc, rec, prec = truth["acc"], truth["rec"], truth["prec"]
     art = load_artifacts() or {}
     thr = ((art.get("alto") or {}).get("rf") or {}).get("umbral_objetivo") or {}
     with st.container(border=True):
@@ -1079,7 +1144,6 @@ else:
                                      f"observados en este filtro; la meta DE-03 es {fmt_pct(RECALL_ALTO_TARGET, 0)}.{thr_txt} "
                                      f"Hay {fmt_int(real_alto - tp)} créditos Alto que hoy no reciben alerta.",
                                 tone=tone, icon="⚠️" if tone == "alto" else "✅"), unsafe_allow_html=True)
-            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             if can_access("modelo"):
                 st.page_link(PAGES["modelo"][0], label="Abrir el simulador de umbral", icon=":material/tune:",
                              width="stretch")
@@ -1101,13 +1165,12 @@ for c_, (k_, v_) in zip(rcols, routes.items()):
         f"<div class='rs-route' style='--rc:{info['color']}'><div class='rs-route-h'><span class='rs-route-code'>{k_}</span>"
         f"<span class='rs-route-sla'>SLA {esc(info['sla'])}</span></div>"
         f"<div class='rs-route-name'>{esc(info['nombre'])}</div>"
-        f"<div class='rs-route-n'>{fmt_int(v_['n'])} <small>créditos · {fmt_pct(_div(v_['n'], S['n']))}</small></div>"
+        f"<div class='rs-route-n'>{fmt_int(v_['n'])} <small>créditos · {_nb(fmt_pct(_div(v_['n'], S['n'])))}</small></div>"
         f"<div class='rs-route-m'>{fmt_cop(v_['monto'])} financiados</div>"
         f"<div class='rs-route-a'>{esc(info['accion'])}</div></div>",
         unsafe_allow_html=True)
 links = [q for q in _QUICK_LINKS if can_access(q[0])]
 if links:
-    st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
     lcols = st.columns(len(links), gap="small")
     for c_, (k_, ttl, desc) in zip(lcols, links):
         with c_:
@@ -1121,7 +1184,7 @@ report = {
     "stats": S, "kpis": kpis, "monthly": _monthly(dff), "findings": F, "top": seg_top, "dim_col": dim_col,
     "dim_label": dim_lbl, "min_n": min_n, "truth": truth, "routes": routes, "chips": active_chips(df_all),
     "generated": datetime.now().strftime("%d/%m/%Y %H:%M"), "source": get_active_meta().get("name", ""),
-    "period": period_txt, "window": window_txt,
+    "period": period_txt, "window": window_txt, "headline": HEADLINE,
 }
 doc = _report_html(report)
 fname = f"reporte_ejecutivo_SAT_{datetime.now().strftime('%Y%m%d_%H%M')}.html"

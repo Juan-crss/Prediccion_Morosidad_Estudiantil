@@ -17,8 +17,8 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from core.components import (badge, empty_state, esc, filter_chips, footer, insight, insight_row, kpi_card, kpi_row,
-                             page_header, risk_badge)
+from core.components import (badge, empty_state, esc, filter_chips, footer, insight, kpi_card, page_header,
+                             risk_badge)
 from core.config import ACTION_ROUTES, RECAUDO_BASELINE, RISK_COLORS, RISK_ICONS
 from core.data import DEFAULT_WEIGHTS, compute_priority, get_active_df, to_excel_bytes
 from core.filters import active_chips, apply_filters
@@ -167,10 +167,32 @@ def _es(x: float, d: int = 0) -> str:
     return fmt_num(x, d)
 
 
+def _nb(text: str) -> str:
+    """Texto con espacios no separables (evita cortes como '$' / '632,1 M' en dos líneas)."""
+    return str(text).replace(" ", "&nbsp;")
+
+
+def _grid(items: list[str], min_px: int = 200) -> None:
+    """Rejilla CSS responsiva: reacomoda tarjetas HTML según el ancho disponible."""
+    st.markdown(f"<div class='cola-grid' style='--min:{min_px}px'>" + "".join(f"<div>{h}</div>" for h in items)
+                + "</div>", unsafe_allow_html=True)
+
+
 def _css() -> None:
     st.markdown(
         """
         <style>
+        /* ---- Rejillas responsivas (se reacomodan según el ancho disponible) ---- */
+        .cola-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(var(--min,200px),100%),1fr));
+          gap:12px;align-items:stretch;}
+        .cola-grid > div{min-width:0;}
+        /* En pantallas medianas/pequeñas las columnas de Streamlit se apilan en lugar de comprimirse. */
+        @media (max-width: 1180px){
+          [data-testid="stMain"] [data-testid="stHorizontalBlock"]{flex-wrap:wrap !important;}
+          [data-testid="stMain"] [data-testid="stHorizontalBlock"] > [data-testid="stColumn"]{
+            flex:1 1 100% !important;width:100% !important;min-width:100% !important;}
+        }
+        .st-key-cola_rutas [role="toolbar"]{flex-wrap:wrap !important;overflow:visible !important;row-gap:6px;}
         .cola-steps{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:2px 0 12px 0;}
         .cola-steps a{display:inline-flex;align-items:center;gap:8px;text-decoration:none !important;font-size:12.5px;
           font-weight:600;color:var(--sat-text) !important;background:var(--sat-surface);border:1px solid var(--sat-border);
@@ -181,9 +203,11 @@ def _css() -> None:
         .cola-steps .sep{color:var(--sat-subtle);font-size:12px;}
         .cola-anchor{scroll-margin-top:70px;}
 
-        .cola-cfg{font-size:12.5px;color:var(--sat-muted);line-height:1.5;}
+        .cola-cfg{font-size:12.5px;color:var(--sat-muted);line-height:1.6;}
         .cola-cfg b{color:var(--sat-text);}
-        .cola-wbar{display:flex;height:8px;border-radius:6px;overflow:hidden;margin:6px 0 4px 0;gap:2px;}
+        .cola-cfg .ln{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+        .cola-wbar{display:inline-flex;width:120px;height:8px;border-radius:6px;overflow:hidden;gap:2px;
+          background:var(--sat-surface-2);vertical-align:middle;}
         .cola-wbar i{display:block;height:100%;}
 
         .cola-route{position:relative;background:var(--sat-surface);border:1px solid var(--sat-border);border-radius:16px;
@@ -195,7 +219,8 @@ def _css() -> None:
           padding:2px 9px;border-radius:7px;color:var(--ri);background:color-mix(in srgb, var(--rc) 15%, transparent);}
         .cola-route .sla{font-size:11.5px;font-weight:700;color:var(--sat-muted);border:1px solid var(--sat-border);
           padding:2px 9px;border-radius:999px;white-space:nowrap;}
-        .cola-route .name{font-weight:700;font-size:15px;margin-top:8px;color:var(--sat-text);}
+        .cola-route .name{font-weight:700;font-size:14px;margin-top:8px;color:var(--sat-text);white-space:nowrap;
+          overflow:hidden;text-overflow:ellipsis;}
         .cola-route .big{font-family:'Space Grotesk','Inter',sans-serif;font-size:30px;font-weight:700;color:var(--sat-text);
           line-height:1.1;margin-top:4px;letter-spacing:-.02em;}
         .cola-route .big small{font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;color:var(--sat-muted);
@@ -216,8 +241,8 @@ def _css() -> None:
         .cola-route .act{font-size:12.5px;color:var(--sat-muted);margin-top:10px;line-height:1.45;min-height:36px;}
         .cola-route .foot{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;}
 
-        .cola-stats{display:flex;flex-direction:column;gap:10px;}
-        .cola-stat{background:var(--sat-surface-2);border:1px solid var(--sat-border);border-radius:14px;padding:12px 14px;}
+        .cola-stat{background:var(--sat-surface);border:1px solid var(--sat-border);border-radius:14px;padding:12px 14px;
+          box-shadow:var(--sat-shadow);height:100%;}
         .cola-stat .k{font-size:12px;font-weight:600;color:var(--sat-muted);}
         .cola-stat .v{font-family:'Space Grotesk','Inter',sans-serif;font-size:26px;font-weight:700;color:var(--sat-text);
           line-height:1.15;letter-spacing:-.02em;}
@@ -232,7 +257,7 @@ def _css() -> None:
         .cola-case .meta{font-size:12.5px;color:var(--sat-muted);margin-top:2px;}
         .cola-case .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
         .cola-case .g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px;}
-        .cola-case .g4 div{background:var(--sat-surface-2);border:1px solid var(--sat-border);border-radius:12px;padding:8px 10px;}
+        .cola-case .g4 > div{background:var(--sat-surface-2);border:1px solid var(--sat-border);border-radius:12px;padding:8px 10px;}
         .cola-case .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--sat-subtle);font-weight:700;}
         .cola-case .v{font-size:16px;font-weight:700;color:var(--sat-text);margin-top:2px;}
         .cola-case .why{margin-top:14px;}
@@ -246,6 +271,12 @@ def _css() -> None:
         .cola-case .act b{color:var(--sat-text);}
         @media (max-width: 1100px){ .cola-case .g4{grid-template-columns:repeat(2,minmax(0,1fr));} }
 
+        .cola-script{background:var(--sat-surface);border:1px solid var(--sat-border);border-radius:14px;padding:12px 14px;
+          margin-top:10px;box-shadow:var(--sat-shadow);}
+        .cola-script .t{font-size:12.5px;font-weight:700;color:var(--sat-text);margin-bottom:6px;}
+        .cola-script .q{font-size:13.5px;line-height:1.5;color:var(--sat-text);border-left:3px solid var(--sat-accent);
+          padding:2px 0 2px 10px;font-style:italic;}
+        .cola-script .f{font-size:11.5px;color:var(--sat-subtle);margin-top:8px;}
         .cola-banner{display:flex;gap:12px;align-items:flex-start;border-radius:14px;padding:12px 16px;
           background:color-mix(in srgb, var(--sat-medio) 11%, var(--sat-surface));border:1px solid color-mix(in srgb, var(--sat-medio) 45%, transparent);
           color:var(--sat-text);font-size:13.5px;line-height:1.5;margin-bottom:10px;}
@@ -254,6 +285,12 @@ def _css() -> None:
         .cola-tests{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;color:var(--sat-muted);margin:4px 0 8px 0;}
         .cola-tests b{color:var(--sat-text);}
         .cola-mini{font-size:12.5px;color:var(--sat-muted);margin:-2px 0 6px 0;}
+        .cola-files{display:flex;flex-direction:column;gap:6px;margin:10px 0 8px 0;}
+        .cola-files div{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:baseline;font-size:12.5px;
+          color:var(--sat-muted);padding:7px 10px;border:1px solid var(--sat-border);border-radius:10px;background:var(--sat-surface-2);}
+        .cola-files code{font-size:12px;color:var(--sat-text);background:transparent;padding:0;font-weight:600;}
+        .cola-files b{color:var(--sat-text);font-weight:700;text-align:right;}
+        .cola-files span{grid-column:1 / -1;}
         </style>
         """,
         unsafe_allow_html=True,
@@ -287,6 +324,7 @@ def _working_frame(df_all: pd.DataFrame, dff: pd.DataFrame, w: dict, custom: boo
     W["exposicion_riesgo"] = W["exposicion_riesgo"].fillna(0.0)
     W["valor_financiacion"] = W["valor_financiacion"].fillna(0.0)
     W["_alto_obs"] = (W["has_truth"] & (W["y_true"].astype(str) == "Alto")).astype(int)
+    W["_idx"] = W.index
     W = W.sort_values(["prioridad", "exposicion_riesgo", "llave2"], ascending=[False, False, True],
                       kind="mergesort").reset_index(drop=True)
     return W
@@ -307,6 +345,18 @@ def _assign(queue: pd.DataFrame, capacity: int, n_gestores: int, strategy: str) 
     q["_g"] = g + 1
     q["gestor"] = "Gestor " + q["_g"].astype(str)
     return q
+
+
+def _compare_default(W: pd.DataFrame, df_all: pd.DataFrame, sel: list[str], capacity: int) -> dict:
+    """Compara el plan de la semana con pesos personalizados frente al plan con los pesos por defecto."""
+    m = W["ruta"].isin(sel).to_numpy()
+    Q = W[m].assign(_p0=df_all["prioridad"].reindex(W.loc[m, "_idx"]).to_numpy())
+    now = Q.head(capacity)
+    dft = Q.sort_values(["_p0", "exposicion_riesgo", "llave2"], ascending=[False, False, True], kind="mergesort").head(capacity)
+    inter = len(set(now["llave2"]) & set(dft["llave2"]))
+    return {"overlap": inter / max(len(now), 1), "alto_now": int(now["_alto_obs"].sum()),
+            "alto_def": int(dft["_alto_obs"].sum()), "exp_now": float(now["exposicion_riesgo"].sum()),
+            "exp_def": float(dft["exposicion_riesgo"].sum())}
 
 
 def _route_stats(W: pd.DataFrame, truth: bool) -> pd.DataFrame:
@@ -343,11 +393,11 @@ def _scenario_gain(queue: pd.DataFrame, W: pd.DataFrame, sel: list[str], contact
 
 def _db04_frame(plan: pd.DataFrame, today: date) -> pd.DataFrame:
     return pd.DataFrame({
-        "id_estudiante": plan["id_estudiante"].astype(str).to_numpy(),
-        "llave2": plan["llave2"].astype(str).to_numpy(),
-        "nombre": plan["nombre"].astype(str).to_numpy(),
-        "programa": plan["programa"].astype(str).to_numpy(),
-        "riesgo_predicho": plan["y_pred"].astype(str).to_numpy(),
+        "id_estudiante": plan["id_estudiante"].astype("string").fillna("").astype(str).to_numpy(),
+        "llave2": plan["llave2"].astype("string").fillna("").astype(str).to_numpy(),
+        "nombre": plan["nombre"].astype("string").fillna("").astype(str).to_numpy(),
+        "programa": plan["programa"].astype("string").fillna("").astype(str).to_numpy(),
+        "riesgo_predicho": plan["y_pred"].astype("string").fillna("").astype(str).to_numpy(),
         "confianza": plan["proba_pred"].astype(float).round(4).to_numpy(),
         "prioridad": plan["prioridad"].astype(float).round(1).to_numpy(),
         "ruta": plan["ruta"].astype(str).to_numpy(),
@@ -425,7 +475,7 @@ _css()
 
 n_r1_hdr = int((dff["ruta"] == "R1").sum()) if len(dff) else 0
 page_header(
-    "Cola de gestión preventiva",
+    "Cola de gestión",
     "Convierte las predicciones en una cola priorizada con rutas de cobro, la dimensiona contra la capacidad del "
     "equipo, la reparte entre gestores y la envía al sistema de cartera.",
     eyebrow="Gestión de cartera",
@@ -449,7 +499,12 @@ st.markdown(
 )
 
 with st.container(border=True):
-    c_w, c_r, c_c, c_g = st.columns([1.15, 2.4, 1.05, 0.95], vertical_alignment="bottom", gap="medium")
+    c_r, c_w = st.columns([2.7, 1], vertical_alignment="bottom", gap="medium")
+    with c_r:
+        st.pills("Rutas que entran a la cola de gestores", ROUTES, selection_mode="multi",
+                 format_func=lambda r: f"{ROUTE_EMOJI[r]} {_route_label(r)}",
+                 help="Por diseño R1 y R2 requieren gestor. R3 se envía por canal automático y R4 es monitoreo; "
+                      "inclúyelas si quieres gestionarlas manualmente.", **_bind("rutas"))
     with c_w:
         with st.popover("⚙️ Pesos de priorización", width="stretch",
                         help="Ajusta cuánto pesa cada componente en el índice de prioridad (0–100)"):
@@ -461,14 +516,11 @@ with st.container(border=True):
             st.slider("Mora histórica en Datacrédito", 0, 100, step=5, format="%d %%", **_bind("w_mora"))
             st.button("↺ Restablecer pesos", key="cola_reset_w", on_click=_reset,
                       args=(["w_riesgo", "w_exposicion", "w_mora"],), width="stretch")
-    with c_r:
-        st.pills("Rutas que entran a la cola de gestores", ROUTES, selection_mode="multi",
-                 format_func=lambda r: f"{ROUTE_EMOJI[r]} {_route_label(r)}",
-                 help="Por diseño R1 y R2 requieren gestor. R3 se envía por canal automático y R4 es monitoreo; "
-                      "inclúyelas si quieres gestionarlas manualmente.", **_bind("rutas"))
+            pop_cmp = st.empty()
+    c_c, c_g, c_s = st.columns([1, 1, 2.7], vertical_alignment="center", gap="medium")
     with c_c:
-        st.number_input("Capacidad semanal (gestiones)", min_value=10, max_value=20000, step=10,
-                        help="Número total de gestiones que el equipo puede realizar por semana.", **_bind("capacidad"))
+        st.number_input("Gestiones por semana", min_value=10, max_value=20000, step=10,
+                        help="Capacidad total de gestiones que el equipo puede realizar por semana.", **_bind("capacidad"))
     with c_g:
         st.number_input("Gestores", min_value=1, max_value=50, step=1,
                         help="Personas disponibles para la gestión preventiva.", **_bind("gestores"))
@@ -481,16 +533,19 @@ with st.container(border=True):
     n_gest = int(max(1, cfg["gestores"] or 1))
     per_g = capacity / n_gest
     tag = badge("Pesos personalizados", "accent") if custom_w else badge("Pesos por defecto", "neutral")
-    st.markdown(
-        f"<div class='cola-cfg'>{tag}&nbsp; Riesgo <b>{fmt_pct(w['riesgo'], 0)}</b> · Exposición "
-        f"<b>{fmt_pct(w['exposicion'], 0)}</b> · Mora <b>{fmt_pct(w['mora'], 0)}</b> &nbsp;|&nbsp; Cola: "
-        f"<b>{esc(', '.join(sel_routes))}</b>{' (todas: no seleccionaste rutas)' if not cfg['rutas'] else ''} &nbsp;|&nbsp; "
-        f"<b>{fmt_int(capacity)}</b> gestiones/semana ≈ <b>{_es(per_g, 1)}</b> por gestor "
-        f"(≈ {_es(per_g / DIAS_HABILES, 1)} al día)<div class='cola-wbar'>{wbar}</div></div>",
-        unsafe_allow_html=True,
-    )
-    if w_fallback:
-        st.caption("⚠️ Todos los pesos están en 0: se usan los pesos por defecto.")
+    with c_s:
+        st.markdown(
+            f"<div class='cola-cfg'><div class='ln'>{tag}<span class='cola-wbar'>{wbar}</span>"
+            f"<span>Riesgo <b>{fmt_pct(w['riesgo'], 0)}</b> · Exposición <b>{fmt_pct(w['exposicion'], 0)}</b> · "
+            f"Mora <b>{fmt_pct(w['mora'], 0)}</b></span></div>"
+            f"<div>Cola de gestores: <b>{esc(', '.join(sel_routes))}</b>"
+            f"{' (todas: no seleccionaste rutas)' if not cfg['rutas'] else ''} · <b>{fmt_int(capacity)}</b> gestiones/semana "
+            f"≈ <b>{_es(per_g, 1)}</b> por gestor (≈ {_es(per_g / DIAS_HABILES, 1)} al día)</div></div>",
+            unsafe_allow_html=True,
+        )
+        if w_fallback:
+            st.caption("⚠️ Todos los pesos están en 0: se usan los pesos por defecto.")
+        sum_cmp = st.empty()
 
 # --------------------------------------------------------------------------------------------
 # Cálculo central
@@ -513,6 +568,16 @@ exp_plan = float(plan["exposicion_riesgo"].sum())
 alto_plan = int(plan["_alto_obs"].sum())
 share_plan_rows = n_plan / max(n_all, 1)
 
+if custom_w and n_q:
+    cmpd = _compare_default(W, df_all, sel_routes, capacity)
+    alto_txt = (f" · Alto observados capturados <b>{fmt_int(cmpd['alto_def'])} → {fmt_int(cmpd['alto_now'])}</b>"
+                if truth else "")
+    cmp_html = (f"<div class='cola-cfg'>Frente a los pesos por defecto, el plan de la semana comparte "
+                f"<b>{fmt_pct(cmpd['overlap'], 0)}</b> de los casos{alto_txt} · exposición en riesgo "
+                f"<b>{_nb(fmt_cop(cmpd['exp_def']))} → {_nb(fmt_cop(cmpd['exp_now']))}</b>.</div>")
+    pop_cmp.markdown(cmp_html, unsafe_allow_html=True)
+    sum_cmp.markdown(cmp_html, unsafe_allow_html=True)
+
 # --------------------------------------------------------------------------------------------
 # KPI
 # --------------------------------------------------------------------------------------------
@@ -528,7 +593,7 @@ else:
                   tone="bajo", bar=cap_share_exp, icon="🎯")
 r1_q = int((queue["ruta"] == "R1").sum())
 w_r1 = math.ceil(r1_q / capacity) if r1_q else 0
-kpi_row([
+_grid([
     kpi_card("Cola de gestores", fmt_int(n_q), f"{', '.join(sel_routes)} · {fmt_pct(n_q / n_all)} de "
              f"{fmt_int(n_all)} créditos", tone="alto", bar=n_q / n_all, icon="📋"),
     kpi_card("Plan de esta semana", fmt_int(n_plan), f"{n_gest} gestores × {_es(per_g, 0)} gestiones",
@@ -541,7 +606,7 @@ kpi_row([
     kpi_card("Semanas para cubrir la cola", fmt_int(weeks_q) if n_q else "—",
              (f"R1 en {w_r1} semana{'s' if w_r1 != 1 else ''} a esta capacidad" if r1_q else "a la capacidad actual"),
              tone="ink", icon="⏱️"),
-])
+], min_px=180)
 
 # ============================================================================================
 # 2 · Rutas de cobro
@@ -571,19 +636,17 @@ for r in ROUTES:
     cards.append(
         f"<div class='cola-route{'' if in_q else ' off'}' style='--rc:{_rc(r)};--ri:{_ri(r)}'>"
         f"<div class='top'><span class='code'>{r}</span><span class='sla'>SLA · {esc(a['sla'])}</span></div>"
-        f"<div class='name'>{esc(a['nombre'])}</div>"
+        f"<div class='name' title='{esc(a['nombre'])}'>{esc(a['nombre'])}</div>"
         f"<div class='big'>{fmt_int(s['n'])}<small>créditos · {fmt_pct(s['share'])}</small></div>"
-        f"<div class='grid'><div><div class='k'>Valor financiado</div><div class='v'>{fmt_cop(s['exposicion'])}</div></div>"
-        f"<div><div class='k'>Exp. en riesgo</div><div class='v'>{fmt_cop(s['exp_riesgo'])}</div></div>"
-        f"<div><div class='k'>Prioridad media</div><div class='v'>{_es(s['prioridad'], 1) if s['n'] else '—'}</div></div>"
-        f"<div><div class='k'>Con mora DC</div><div class='v'>{fmt_pct(s['mora']) if s['n'] else '—'}</div></div></div>"
+        f"<div class='grid'><div><div class='k'>Financiado</div><div class='v'>{_nb(fmt_cop(s['exposicion']))}</div></div>"
+        f"<div><div class='k'>En riesgo</div><div class='v'>{_nb(fmt_cop(s['exp_riesgo']))}</div></div>"
+        f"<div><div class='k'>Prioridad</div><div class='v'>{_es(s['prioridad'], 1) if s['n'] else '—'}</div></div>"
+        f"<div><div class='k'>Mora DC</div><div class='v'>{fmt_pct(s['mora']) if s['n'] else '—'}</div></div></div>"
         f"{obs}<div class='act'>{esc(a['accion'])}</div>"
         f"<div class='foot'>{badge(chan, chan_kind)}</div></div>"
     )
-rc = st.columns(4)
-for col, h in zip(rc, cards):
-    with col:
-        st.markdown(h, unsafe_allow_html=True)
+_grid(cards, min_px=225)
+st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
 
 # Hallazgos automáticos
 ins = []
@@ -618,7 +681,7 @@ elif r3s["n"] > 0:
                        f"R3 cubre <b>{fmt_int(r3s['n'])}</b> créditos con recordatorio automático sin consumir capacidad; "
                        f"<b>{fmt_pct(r3s['mora'])}</b> tiene mora en Datacrédito.", tone="info", icon="🤖"))
 if ins:
-    insight_row(ins)
+    _grid(ins, min_px=260)
 
 # ============================================================================================
 # 3 · Capacidad vs riesgo capturado
@@ -641,9 +704,9 @@ cc1, cc2 = st.columns([2.35, 1], gap="medium")
 with cc1:
     with st.container(border=True):
         hz_opts = ["4 semanas", "12 semanas", "Toda la cartera"]
-        h1, h2 = st.columns([1.6, 1.4], vertical_alignment="center")
-        h1.markdown("<div class='cola-mini'>Las líneas verticales marcan cada semana de gestión a la capacidad actual; "
-                    "la amarilla es la primera semana.</div>", unsafe_allow_html=True)
+        h1, h2 = st.columns([1.05, 1.5], vertical_alignment="center")
+        h1.markdown("<div class='cola-mini' style='margin:0'>Cada línea vertical es una semana de gestión a la capacidad "
+                    "actual; la amarilla es la primera.</div>", unsafe_allow_html=True)
         with h2:
             st.segmented_control("Horizonte de la curva", hz_opts, selection_mode="single",
                                  label_visibility="collapsed", width="stretch", **_bind("horizonte"))
@@ -652,45 +715,49 @@ with cc1:
         xmax = int(min(max(xmax, 10), n_all))
         idx = np.unique(np.concatenate([np.linspace(0, xmax - 1, min(xmax, 400)).astype(int), [k_cap - 1]]))
         idx = idx[(idx >= 0) & (idx < n_all)]
-        xs = idx + 1
+        xs = np.concatenate([[0], idx + 1])
+        pct_cart = [fmt_pct(v / n_all) for v in xs]
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=np.concatenate([[0], xs]), y=np.concatenate([[0], xs / n_all]), mode="lines",
-                                 name="Orden aleatorio", line=dict(color=p["subtle"], width=1.5, dash="dot"),
-                                 hovertemplate="Aleatorio: %{y:.1%}<extra></extra>"))
-        if truth:
-            ceil_y = np.minimum(xs, tot_alto) / tot_alto
-            fig.add_trace(go.Scatter(x=np.concatenate([[0], xs]), y=np.concatenate([[0], ceil_y]), mode="lines",
-                                     name="Techo teórico (Alto)", line=dict(color=_rgba(RISK_COLORS["Alto"], .35), width=1.5,
-                                                                            dash="dash"),
-                                     hovertemplate="Techo teórico: %{y:.1%}<extra></extra>"))
-            fig.add_trace(go.Scatter(x=np.concatenate([[0], xs]), y=np.concatenate([[0], cum_alto[idx]]), mode="lines",
-                                     name="Alto observados capturados", line=dict(color=RISK_COLORS["Alto"], width=2.5),
-                                     hovertemplate="Alto observados: %{y:.1%}<extra></extra>"))
-        fig.add_trace(go.Scatter(x=np.concatenate([[0], xs]), y=np.concatenate([[0], cum_exp[idx]]), mode="lines",
+        fig.add_trace(go.Scatter(x=xs, y=np.concatenate([[0], cum_exp[idx]]) * 100, mode="lines", legendrank=1,
                                  name="Exposición en riesgo capturada", line=dict(color=p["text"], width=2.5),
-                                 hovertemplate="Exposición en riesgo: %{y:.1%}<extra></extra>"))
+                                 customdata=pct_cart,
+                                 hovertemplate="Exposición en riesgo: %{y:.1f} % <span style='opacity:.7'>"
+                                               "(%{customdata} de la cartera)</span><extra></extra>"))
+        if truth:
+            fig.add_trace(go.Scatter(x=xs, y=np.concatenate([[0], cum_alto[idx]]) * 100, mode="lines", legendrank=2,
+                                     name="Alto observados capturados", line=dict(color=RISK_COLORS["Alto"], width=2.5),
+                                     hovertemplate="Alto observados: %{y:.1f} %<extra></extra>"))
+            fig.add_trace(go.Scatter(x=xs, y=np.minimum(xs, tot_alto) / tot_alto * 100, mode="lines", legendrank=3,
+                                     name="Techo teórico (Alto)",
+                                     line=dict(color=_rgba(RISK_COLORS["Alto"], .4), width=1.5, dash="dash"),
+                                     hovertemplate="Techo teórico: %{y:.1f} %<extra></extra>"))
+        fig.add_trace(go.Scatter(x=xs, y=xs / n_all * 100, mode="lines", name="Orden aleatorio", legendrank=4,
+                                 line=dict(color=p["subtle"], width=1.5, dash="dot"),
+                                 hovertemplate="Orden aleatorio: %{y:.1f} %<extra></extra>"))
         n_weeks_lines = int(xmax // capacity)
         if n_weeks_lines <= 12:
             for kk in range(2, n_weeks_lines + 1):
                 fig.add_vline(x=kk * capacity, line=dict(color=p["grid"], width=1))
                 fig.add_annotation(x=kk * capacity, y=1.0, yref="paper", text=f"S{kk}", showarrow=False,
                                    font=dict(size=10, color=p["subtle"]), yanchor="bottom")
-        fig.add_vline(x=k_cap, line=dict(color="#FFD100", width=2))
-        fig.add_annotation(x=k_cap, y=1.0, yref="paper", text=f"<b>S1 · {fmt_int(k_cap)}</b>", showarrow=False,
-                           font=dict(size=11, color=p["text"]), yanchor="bottom", xanchor="left", xshift=4)
-        fig.add_trace(go.Scatter(x=[k_cap], y=[cap_exp], mode="markers", showlegend=False, hoverinfo="skip",
+        fig.add_vline(x=k_cap, line=dict(color="#FFD100", width=2.5))
+        fig.add_annotation(x=k_cap, y=1.0, yref="paper", text="<b>S1</b>", showarrow=False,
+                           font=dict(size=11, color=p["text"]), yanchor="bottom")
+        lab = dict(showarrow=False, xanchor="left", xshift=9, borderpad=2, bgcolor=p["surface"])
+        fig.add_trace(go.Scatter(x=[k_cap], y=[cap_exp * 100], mode="markers", showlegend=False, hoverinfo="skip",
                                  marker=dict(size=10, color=p["text"], line=dict(color=p["surface"], width=2))))
-        fig.add_annotation(x=k_cap, y=cap_exp, text=f"<b>{fmt_pct(cap_exp)}</b>", showarrow=False, xanchor="left",
-                           xshift=10, yshift=8, font=dict(color=p["text"], size=12))
+        fig.add_annotation(x=k_cap, y=cap_exp * 100, text=f"<b>{fmt_pct(cap_exp)}</b>", yshift=10,
+                           font=dict(color=p["text"], size=12), **lab)
         if truth:
-            fig.add_trace(go.Scatter(x=[k_cap], y=[cap_alto_c], mode="markers", showlegend=False, hoverinfo="skip",
-                                     marker=dict(size=10, color=RISK_COLORS["Alto"], line=dict(color=p["surface"], width=2))))
-            fig.add_annotation(x=k_cap, y=cap_alto_c, text=f"<b>{fmt_pct(cap_alto_c)}</b>", showarrow=False,
-                               xanchor="left", xshift=10, yshift=-8, font=dict(color=_ri("R1"), size=12))
+            fig.add_trace(go.Scatter(x=[k_cap], y=[cap_alto_c * 100], mode="markers", showlegend=False,
+                                     hoverinfo="skip", marker=dict(size=10, color=RISK_COLORS["Alto"],
+                                                                   line=dict(color=p["surface"], width=2))))
+            fig.add_annotation(x=k_cap, y=cap_alto_c * 100, text=f"<b>{fmt_pct(cap_alto_c)}</b>", yshift=-10,
+                               font=dict(color=_ri("R1"), size=12), **lab)
         fig.update_layout(hovermode="x unified", margin=dict(l=8, r=16, t=56, b=8),
                           xaxis=dict(title="Gestiones realizadas (créditos de mayor prioridad)", range=[0, xmax * 1.02],
-                                     tickformat=",d"),
-                          yaxis=dict(title="% capturado del total", tickformat=".0%", range=[0, 1.04]),
+                                     tickformat=",d", hoverformat=",d"),
+                          yaxis=dict(title="% capturado del total", ticksuffix=" %", range=[0, 104]),
                           legend=dict(y=1.1))
         show_fig(fig, key="cola_curva", height=410)
 
@@ -700,7 +767,7 @@ with cc2:
         f"<div class='cola-stat hl'><div class='k'>Semana 1 · {fmt_int(k_cap)} gestiones</div>"
         f"<div class='v'>{fmt_pct(rand)}</div><div class='s'>de la cartera filtrada ({fmt_int(n_all)} créditos)</div></div>",
         f"<div class='cola-stat'><div class='k'>Exposición en riesgo capturada</div><div class='v'>{fmt_pct(cap_exp)}</div>"
-        f"<div class='s'><b>{_es(lift_e, 1)}×</b> lo que lograría un orden aleatorio · {fmt_cop(cap_exp * tot_exp_r)}</div></div>",
+        f"<div class='s'><b>{_es(lift_e, 1)}×</b> lo que lograría un orden aleatorio · {_nb(fmt_cop(cap_exp * tot_exp_r))}</div></div>",
     ]
     if truth:
         lift_a = cap_alto_c / rand if rand else np.nan
@@ -718,7 +785,7 @@ with cc2:
         blocks.append(
             f"<div class='cola-stat'><div class='k'>Para cubrir la mitad de la exposición en riesgo</div>"
             f"<div class='v'>{fmt_int(k50)}</div><div class='s'>gestiones ≈ <b>{_es(k50 / capacity, 1)} semanas</b></div></div>")
-    st.markdown("<div class='cola-stats'>" + "".join(blocks) + "</div>", unsafe_allow_html=True)
+    _grid(blocks, min_px=200)
 
 # Deciles de prioridad
 with st.container(border=True):
@@ -749,15 +816,15 @@ with st.container(border=True):
         hovertemplate="<b>%{x}</b><br>" + ytitle + ": %{y:.1%}<br>Lift: %{customdata[2]}×<br>Créditos: %{customdata[0]}"
                       "<br>Exposición en riesgo: %{customdata[1]}<extra></extra>",
         text=[fmt_pct(v) if i in (0, len(yv) - 1) else "" for i, v in enumerate(yv)], textposition="outside",
-        textfont=dict(color=p["text"], size=12), cliponaxis=False,
+        textfont=dict(color=p["text"], size=12), cliponaxis=False, constraintext="none",
     ))
     figd.add_hline(y=base_rate, line=dict(color=p["muted"], width=1.5, dash="dash"),
                    annotation_text=f"Base {fmt_pct(base_rate)}", annotation_position="top right",
                    annotation_font=dict(color=p["muted"], size=11))
-    figd.update_layout(bargap=0.35, margin=dict(l=8, r=8, t=24, b=8),
+    figd.update_layout(bargap=0.35, margin=dict(l=8, r=8, t=8, b=8),
                        xaxis=dict(title="Decil de prioridad"), yaxis=dict(title=ytitle, tickformat=".0%",
-                                                                          range=[0, max(float(np.nanmax(yv)) if len(yv) else 0, 0.01) * 1.22]))
-    show_fig(figd, key="cola_deciles", height=300, legend=False)
+                                                                          range=[0, max(float(np.nanmax(yv)) if len(yv) else 0, 0.01) * 1.15]))
+    show_fig(figd, key="cola_deciles", height=280, legend=False)
 
 # ============================================================================================
 # 4 · Cola priorizada
@@ -772,24 +839,24 @@ def _queue_block(queue: pd.DataFrame, w: dict, truth: bool, n_gest: int) -> None
         empty_state("La cola de gestores está vacía", "Ninguna de las rutas seleccionadas tiene créditos con los filtros "
                     "actuales. Incluye más rutas o amplía los filtros.", icon="📭")
         return
-    v1, v2, v3 = st.columns([1.5, 1.1, 2], vertical_alignment="bottom")
+    v1, v2, v3 = st.columns([1.45, 1.05, 2.1], vertical_alignment="center")
     with v1:
-        st.segmented_control("Vista", ["Plan de la semana", "Cola completa"], selection_mode="single", width="stretch",
-                             **_bind("vista"))
+        st.segmented_control("Vista de la cola", ["Plan de la semana", "Cola completa"], selection_mode="single",
+                             width="stretch", label_visibility="collapsed", **_bind("vista"))
     gopts = ["Todos los gestores"] + [f"Gestor {i}" for i in range(1, n_gest + 1)]
     if _cfg()["gestor_ver"] not in gopts:
         _cfg()["gestor_ver"] = gopts[0]
     with v2:
-        st.selectbox("Ver la cola de", gopts, **_bind("gestor_ver"))
+        st.selectbox("Ver la cola de", gopts, label_visibility="collapsed", **_bind("gestor_ver"))
     vista = _cfg()["vista"] or "Plan de la semana"
     view = queue[queue["semana"] == 1] if vista == "Plan de la semana" else queue
     gv = _cfg()["gestor_ver"]
     if gv != "Todos los gestores":
         view = view[view["gestor"] == gv]
     with v3:
-        st.markdown(f"<div class='cola-mini' style='text-align:right'>Mostrando <b>{fmt_int(len(view))}</b> casos · "
-                    f"{fmt_cop(view['exposicion_riesgo'].sum())} de exposición en riesgo · "
-                    f"{fmt_cop(view['valor_financiacion'].sum())} financiados</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='cola-mini' style='text-align:right;margin:0'>Mostrando <b>{fmt_int(len(view))}</b> casos · "
+                    f"<b>{_nb(fmt_cop(view['exposicion_riesgo'].sum()))}</b> en riesgo · "
+                    f"{_nb(fmt_cop(view['valor_financiacion'].sum()))} financiados</div>", unsafe_allow_html=True)
     if view.empty:
         empty_state("Sin casos para esta vista", "Este gestor no tiene casos asignados en la vista elegida.", icon="📭")
         return
@@ -797,40 +864,40 @@ def _queue_block(queue: pd.DataFrame, w: dict, truth: bool, n_gest: int) -> None
     tbl = pd.DataFrame({
         "#": view["_pos"] + 1,
         "Prioridad": view["prioridad"].astype(float),
-        "Ruta": view["ruta"].map(lambda r: f"{ROUTE_EMOJI[r]} {_route_label(r)}"),
-        "SLA": view["ruta"].map(lambda r: ACTION_ROUTES[r]["sla"]),
         "Riesgo": view["y_pred"].astype(str).map(lambda x: f"{RISK_ICONS.get(x, '⚪')} {x}"),
         "Confianza": (view["proba_pred"] * 100).round(0),
         "Estudiante": view["nombre"],
-        "ID": view["id_estudiante"].astype(str),
-        "Programa": view["programa"],
+        "Ruta": view["ruta"].map(lambda r: f"{ROUTE_EMOJI[r]} {_route_label(r)}"),
+        "SLA": view["ruta"].map(lambda r: ACTION_ROUTES[r]["sla"]),
+        "Gestor": view["gestor"],
+        "Semana": "S" + view["semana"].astype(str),
         "Valor financiado": view["valor_financiacion"].round(0).astype("int64"),
         "Exp. en riesgo": view["exposicion_riesgo"].round(0).astype("int64"),
         "Mora DC": view["mora_flag"].astype(bool),
-        "Gestor": view["gestor"],
-        "Semana": "S" + view["semana"].astype(str),
+        "ID": view["id_estudiante"].astype(str),
+        "Programa": view["programa"],
     })
     key = f"cola_tabla_{vista}_{gv}_{len(view)}"
     ev = st.dataframe(
         tbl, key=key, hide_index=True, on_select="rerun", selection_mode="single-row", height=430,
         column_config={
-            "#": st.column_config.NumberColumn("#", format="%d", width=56, help="Posición en la cola priorizada"),
+            "#": st.column_config.NumberColumn("#", format="%d", width=48, help="Posición en la cola priorizada"),
             "Prioridad": st.column_config.ProgressColumn("Prioridad", min_value=0, max_value=100, format="%.0f",
-                                                         width="small", help="Índice de prioridad 0–100"),
-            "Ruta": st.column_config.TextColumn("Ruta", width="medium"),
-            "SLA": st.column_config.TextColumn("SLA", width="small"),
-            "Riesgo": st.column_config.TextColumn("Riesgo", width="small", help="Clase predicha por el modelo"),
-            "Confianza": st.column_config.NumberColumn("Confianza", format="%d %%", width="small",
+                                                         width=105, help="Índice de prioridad 0–100"),
+            "Riesgo": st.column_config.TextColumn("Riesgo", width=82, help="Clase predicha por el modelo"),
+            "Confianza": st.column_config.NumberColumn("Confianza", format="%d %%", width=88,
                                                        help="Probabilidad de la clase predicha"),
-            "Estudiante": st.column_config.TextColumn("Estudiante", width="medium", help="Nombre anonimizado"),
-            "ID": st.column_config.TextColumn("ID", width="small"),
-            "Programa": st.column_config.TextColumn("Programa", width="medium"),
-            "Valor financiado": st.column_config.NumberColumn("Valor financiado (COP)", format="localized", width="small"),
-            "Exp. en riesgo": st.column_config.NumberColumn("Exp. en riesgo (COP)", format="localized", width="small",
+            "Estudiante": st.column_config.TextColumn("Estudiante", width=190, help="Nombre anonimizado"),
+            "Ruta": st.column_config.TextColumn("Ruta", width=140),
+            "SLA": st.column_config.TextColumn("SLA", width=86),
+            "Gestor": st.column_config.TextColumn("Gestor", width=82),
+            "Semana": st.column_config.TextColumn("Semana", width=72, help="Semana programada según capacidad"),
+            "Valor financiado": st.column_config.NumberColumn("Financiado (COP)", format="localized", width=122),
+            "Exp. en riesgo": st.column_config.NumberColumn("En riesgo (COP)", format="localized", width=118,
                                                             help="Valor financiado × intensidad de riesgo"),
-            "Mora DC": st.column_config.CheckboxColumn("Mora DC", width="small", help="Mora reportada en Datacrédito"),
-            "Gestor": st.column_config.TextColumn("Gestor", width="small"),
-            "Semana": st.column_config.TextColumn("Semana", width="small", help="Semana programada según capacidad"),
+            "Mora DC": st.column_config.CheckboxColumn("Mora DC", width=74, help="Mora reportada en Datacrédito"),
+            "ID": st.column_config.TextColumn("ID", width=96),
+            "Programa": st.column_config.TextColumn("Programa", width=260),
         },
     )
     rows = list(getattr(getattr(ev, "selection", None), "rows", []) or [])
@@ -856,7 +923,8 @@ def _case_detail(rec: pd.Series, w: dict, truth: bool) -> None:
     dia = int(rec["fecha_de_pago"]) if pd.notna(rec.get("fecha_de_pago")) else None
     truth_chip = ""
     if truth and bool(rec["has_truth"]):
-        truth_chip = f"<span class='cola-mini' style='margin:0'>Observado:</span> {risk_badge(str(rec['y_true']))}"
+        truth_chip = (f"<span class='cola-mini' style='margin:0 0 0 4px'>Observado (validación):</span> "
+                      f"{risk_badge(str(rec['y_true']))}")
     html = (
         f"<div class='cola-case'><div class='hd'><div><div class='nm'>{esc(rec['nombre'])}</div>"
         f"<div class='meta'>ID {esc(rec['id_estudiante'])} · Crédito {esc(rec['llave2'])} · {esc(rec['programa'])}"
@@ -886,8 +954,11 @@ def _case_detail(rec: pd.Series, w: dict, truth: bool) -> None:
             open_ficha(str(rec["id_estudiante"]))
         guion = GUIONES.get(r, "").format(nombre=str(rec["nombre"]).split(" ")[0], gestor=str(rec["gestor"]),
                                           dia=dia if dia else "—")
-        with st.expander("💬 Guion sugerido para el contacto", expanded=True):
-            st.code(guion, language=None, wrap_lines=True)
+        canal = {"R1": "Llamada del gestor", "R2": "WhatsApp / SMS + correo", "R3": "Mensaje automático",
+                 "R4": "Sin contacto adicional"}.get(r, "")
+        st.markdown(f"<div class='cola-script'><div class='t'>💬 Guion sugerido · {esc(canal)}</div>"
+                    f"<div class='q'>{esc(guion)}</div><div class='f'>Personalizado con el nombre, el gestor y el día de "
+                    f"pago. Ajústalo al protocolo de Cartera.</div></div>", unsafe_allow_html=True)
 
 
 _queue_block(queue, w, truth, n_gest)
@@ -904,31 +975,38 @@ else:
     a1, a2 = st.columns([1.3, 3], vertical_alignment="center")
     with a1:
         st.segmented_control("Estrategia de reparto", ["Round-robin", "Serpentina"], selection_mode="single",
-                             width="stretch", help="Round-robin: 1, 2, …, N, 1, 2, … · Serpentina: 1…N, N…1 "
+                             width="stretch", label_visibility="collapsed",
+                             help="Round-robin: 1, 2, …, N, 1, 2, … · Serpentina: 1…N, N…1 "
                              "(compensa que el primer gestor siempre toma el caso más prioritario de cada vuelta).",
                              **_bind("reparto"))
-
-    def _balance(pl: pd.DataFrame) -> float:
-        e = pl.groupby("gestor")["exposicion_riesgo"].sum()
-        return float((e.max() - e.min()) / e.mean()) if len(e) > 1 and e.mean() > 0 else 0.0
-
-    other = "Serpentina" if cfg["reparto"] != "Serpentina" else "Round-robin"
-    plan_other = _assign(W[W["ruta"].isin(sel_routes)].head(min(capacity, n_q)), capacity, n_gest, other)
-    bal, bal_o = _balance(plan), _balance(plan_other)
+    strategy = cfg["reparto"] or "Round-robin"
     with a2:
         st.markdown(
-            f"<div class='cola-mini' style='margin:0'>Capacidad por gestor: <b>{_es(per_g, 1)}</b> gestiones/semana. "
-            f"Brecha de exposición entre el gestor con más y con menos carga: <b>{fmt_pct(bal)}</b> del promedio con "
-            f"<b>{esc(cfg['reparto'] or 'Round-robin')}</b> · {fmt_pct(bal_o)} con {esc(other)}.</div>",
+            f"<div class='cola-mini' style='margin:0'><b>Estrategia de reparto.</b> Round-robin asigna 1, 2, …, N, 1, 2, …; "
+            f"la serpentina alterna el sentido (1…N, N…1) para compensar que el primer gestor siempre toma el caso más "
+            f"prioritario de cada vuelta. Capacidad individual: <b>{_es(per_g, 1)}</b> gestiones/semana.</div>",
             unsafe_allow_html=True)
+
+    def _balance(pl: pd.DataFrame) -> float:
+        e = pl.groupby("gestor")["exposicion_riesgo"].sum().reindex([f"Gestor {i}" for i in range(1, n_gest + 1)],
+                                                                    fill_value=0.0)
+        return float((e.max() - e.min()) / e.mean()) if len(e) > 1 and e.mean() > 0 else 0.0
+
+    other = "Serpentina" if strategy != "Serpentina" else "Round-robin"
+    plan_other = _assign(W[W["ruta"].isin(sel_routes)].head(min(capacity, n_q)), capacity, n_gest, other)
+    bal, bal_o = _balance(plan), _balance(plan_other)
 
     gcols = [f"Gestor {i}" for i in range(1, n_gest + 1)]
     load = plan.groupby(["gestor", "ruta"]).size().unstack(fill_value=0).reindex(index=gcols, fill_value=0)
+    ge = plan.groupby("gestor").agg(exp=("exposicion_riesgo", "sum"), val=("valor_financiacion", "sum"),
+                                    prio=("prioridad", "mean"), n=("llave2", "size")).reindex(gcols)
+    ge = ge.fillna({"exp": 0, "val": 0, "n": 0})
+    tick_angle = 0 if n_gest <= 8 else -45
     g1, g2 = st.columns(2, gap="medium")
     with g1:
         with st.container(border=True):
-            st.markdown("<div class='cola-mini'><b>Carga de la semana por gestor</b> · casos por ruta; la línea marca la "
-                        "capacidad individual.</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='cola-mini'><b>Carga de la semana por gestor</b> · casos por ruta; la línea punteada "
+                        f"marca la capacidad individual ({_es(per_g, 0)}).</div>", unsafe_allow_html=True)
             figl = go.Figure()
             for r in ROUTES:
                 if r in load.columns and load[r].sum() > 0:
@@ -939,44 +1017,37 @@ else:
             figl.add_trace(go.Scatter(x=load.index, y=tot, mode="text", text=[fmt_int(v) for v in tot],
                                       textposition="top center", textfont=dict(color=p["text"], size=12),
                                       showlegend=False, hoverinfo="skip", cliponaxis=False))
-            figl.add_hline(y=per_g, line=dict(color=p["muted"], width=1.5, dash="dash"),
-                           annotation_text=f"Capacidad {_es(per_g, 0)}", annotation_position="top left",
-                           annotation_font=dict(color=p["muted"], size=11))
-            figl.update_layout(barmode="stack", bargap=0.4, margin=dict(l=8, r=8, t=48, b=8),
-                               yaxis=dict(title="Casos asignados", range=[0, max(float(tot.max()), per_g) * 1.2]),
-                               xaxis=dict(title=None, tickangle=0 if n_gest <= 10 else -45))
-            show_fig(figl, key="cola_carga", height=340)
+            figl.add_hline(y=per_g, line=dict(color=p["muted"], width=1.5, dash="dash"))
+            figl.update_layout(barmode="stack", bargap=0.4, margin=dict(l=8, r=8, t=40, b=8),
+                               legend=dict(traceorder="normal"),
+                               yaxis=dict(title="Casos asignados", range=[0, max(float(tot.max()), per_g) * 1.22]),
+                               xaxis=dict(title=None, tickangle=tick_angle))
+            show_fig(figl, key="cola_carga", height=320)
     with g2:
         with st.container(border=True):
-            st.markdown("<div class='cola-mini'><b>Exposición en riesgo asignada por gestor</b> · la línea marca el "
-                        "promedio del equipo.</div>", unsafe_allow_html=True)
-            ge = plan.groupby("gestor").agg(exp=("exposicion_riesgo", "sum"), val=("valor_financiacion", "sum"),
-                                            prio=("prioridad", "mean"), n=("llave2", "size")).reindex(gcols)
-            ge = ge.fillna({"exp": 0, "val": 0, "n": 0})
+            st.markdown("<div class='cola-mini'><b>Exposición en riesgo asignada por gestor</b> · la línea punteada marca "
+                        "el promedio del equipo.</div>", unsafe_allow_html=True)
             figx = go.Figure(go.Bar(
-                x=ge.index, y=ge["exp"], marker=dict(color=_rgba("#FFD100", .95) if _dark() else p["text"],
-                                                     cornerradius=4),
+                x=ge.index, y=ge["exp"], marker=dict(color="#FFD100" if _dark() else p["text"], cornerradius=4),
                 customdata=np.stack([ge["exp"].map(fmt_cop), ge["val"].map(fmt_cop), ge["prio"].map(lambda v: _es(v, 1)),
                                      ge["n"].map(fmt_int)], axis=-1),
                 hovertemplate="<b>%{x}</b><br>Exposición en riesgo: %{customdata[0]}<br>Valor financiado: "
                               "%{customdata[1]}<br>Prioridad media: %{customdata[2]}<br>Casos: %{customdata[3]}<extra></extra>",
-                text=ge["exp"].map(fmt_cop), textposition="outside", textfont=dict(color=p["text"], size=11),
-                cliponaxis=False,
+                text=ge["exp"].map(fmt_cop) if n_gest <= 8 else None, textposition="inside", insidetextanchor="end",
+                textangle=0, textfont=dict(color="#141414" if _dark() else "#FFFFFF", size=11), constraintext="none",
             ))
-            figx.add_hline(y=float(ge["exp"].mean()), line=dict(color=p["muted"], width=1.5, dash="dash"),
-                           annotation_text="Promedio", annotation_position="top left",
-                           annotation_font=dict(color=p["muted"], size=11))
-            figx.update_layout(bargap=0.4, margin=dict(l=8, r=8, t=48, b=8), showlegend=False,
+            figx.add_hline(y=float(ge["exp"].mean()), line=dict(color=p["muted"], width=1.5, dash="dash"))
+            figx.update_layout(bargap=0.4, margin=dict(l=8, r=8, t=40, b=8), showlegend=False,
                                yaxis=dict(title="Exposición en riesgo (COP)", tickformat="~s",
-                                          range=[0, float(ge["exp"].max()) * 1.25 if ge["exp"].max() > 0 else 1]),
-                               xaxis=dict(title=None, tickangle=0 if n_gest <= 10 else -45))
-            show_fig(figx, key="cola_expo_gestor", height=340, legend=False)
+                                          range=[0, float(ge["exp"].max()) * 1.22 if ge["exp"].max() > 0 else 1]),
+                               xaxis=dict(title=None, tickangle=tick_angle))
+            show_fig(figx, key="cola_expo_gestor", height=320, legend=False)
 
-    s1, s2 = st.columns([1.35, 1], gap="medium")
+    s1, s2 = st.columns([1.2, 1], gap="medium")
     with s1:
         with st.container(border=True):
             st.markdown("<div class='cola-mini'><b>Programación de la cola por semana</b> · cómo se evacúa la cola a la "
-                        "capacidad actual (máximo 12 semanas visibles).</div>", unsafe_allow_html=True)
+                        "capacidad actual (hasta 12 semanas; el resto se agrupa en S13+).</div>", unsafe_allow_html=True)
             qq = queue.assign(_s=np.where(queue["semana"] <= 12, "S" + queue["semana"].astype(str), "S13+"))
             order = [f"S{i}" for i in range(1, min(int(queue["semana"].max()), 12) + 1)] + \
                     (["S13+"] if queue["semana"].max() > 12 else [])
@@ -987,32 +1058,43 @@ else:
                     figw.add_trace(go.Bar(x=wk.index, y=wk[r], name=_route_label(r),
                                           marker=dict(color=_rc(r), line=dict(color=p["surface"], width=1.5)),
                                           hovertemplate="%{x}<br>" + _route_label(r) + ": %{y:,d} casos<extra></extra>"))
+            figw.add_hline(y=capacity, line=dict(color=p["muted"], width=1.5, dash="dash"))
             if queue["semana"].max() > 12:
                 figw.add_annotation(x="S13+", y=float(wk.loc["S13+"].sum()), text=f"{fmt_int(wk.loc['S13+'].sum())}",
                                     showarrow=False, yshift=10, font=dict(color=p["text"], size=11))
-            figw.update_layout(barmode="stack", bargap=0.3, margin=dict(l=8, r=8, t=48, b=8),
-                               yaxis=dict(title="Casos programados"), xaxis=dict(title="Semana de gestión"))
+            figw.update_layout(barmode="stack", bargap=0.3, margin=dict(l=8, r=8, t=40, b=8),
+                               legend=dict(traceorder="normal"),
+                               yaxis=dict(title="Casos programados", range=[0, max(float(wk.sum(axis=1).max()),
+                                                                                  capacity) * 1.15]),
+                               xaxis=dict(title="Semana de gestión"))
             show_fig(figw, key="cola_semanas", height=320)
     with s2:
-        with st.container(border=True):
-            st.markdown("<div class='cola-mini'><b>Resumen por gestor (semana 1)</b></div>", unsafe_allow_html=True)
-            summ = pd.DataFrame(index=gcols)
-            summ["Casos"] = load.sum(axis=1)
-            for r in ROUTES:
-                if r in load.columns and load[r].sum() > 0:
-                    summ[r] = load[r]
-            summ["Exposición en riesgo"] = ge["exp"].round(0).astype("int64")
-            summ["Participación"] = (ge["exp"] / ge["exp"].sum() * 100) if ge["exp"].sum() else 0.0
-            summ["Uso de capacidad"] = summ["Casos"] / per_g * 100
-            summ = summ.reset_index(names="Gestor")
-            st.dataframe(summ, hide_index=True, height=min(38 + 35 * len(summ), 300), key="cola_tbl_gestores",
-                         column_config={
-                             "Casos": st.column_config.NumberColumn(format="%d"),
-                             "Exposición en riesgo": st.column_config.NumberColumn("Exp. en riesgo (COP)", format="localized"),
-                             "Participación": st.column_config.ProgressColumn(min_value=0, max_value=100, format="%.0f %%"),
-                             "Uso de capacidad": st.column_config.ProgressColumn(min_value=0, max_value=100,
-                                                                                 format="%.0f %%"),
-                         })
+        stat_bal = (f"<div class='cola-stat hl'><div class='k'>Brecha de exposición entre gestores</div>"
+                    f"<div class='v'>{fmt_pct(bal)}</div><div class='s'>del promedio con <b>{esc(strategy)}</b> · "
+                    f"{fmt_pct(bal_o)} con {esc(other)}</div></div>")
+        stat_cap = (f"<div class='cola-stat'><div class='k'>Uso de la capacidad semanal</div>"
+                    f"<div class='v'>{fmt_pct(n_plan / capacity, 0)}</div><div class='s'>{fmt_int(n_plan)} de "
+                    f"{fmt_int(capacity)} gestiones · {fmt_int(max(n_q - n_plan, 0))} casos quedan para las semanas "
+                    f"siguientes</div></div>")
+        _grid([stat_bal, stat_cap], min_px=200)
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        summ = pd.DataFrame({
+            "Gestor": gcols,
+            "Casos": load.sum(axis=1).to_numpy().astype(int),
+            "Prioridad": ge["prio"].round(1).to_numpy(),
+            "En riesgo (COP)": ge["exp"].round(0).astype("int64").to_numpy(),
+            "Participación": (ge["exp"] / ge["exp"].sum() * 100).to_numpy() if ge["exp"].sum() else 0.0,
+        })
+        st.dataframe(summ, hide_index=True, height=min(38 + 35 * len(summ), 250), key="cola_tbl_gestores",
+                     column_config={
+                         "Gestor": st.column_config.TextColumn(width=78),
+                         "Casos": st.column_config.NumberColumn(format="%d", width=56),
+                         "Prioridad": st.column_config.NumberColumn(format="localized", width=74,
+                                                                    help="Prioridad media de los casos asignados"),
+                         "En riesgo (COP)": st.column_config.NumberColumn(format="localized", width=112),
+                         "Participación": st.column_config.ProgressColumn("Particip.", min_value=0, max_value=100,
+                                                                          format="%.0f %%", width=96),
+                     })
 
 # ============================================================================================
 # 6 · Escenario ilustrativo de recaudo
@@ -1031,7 +1113,7 @@ def _scenario_block(queue: pd.DataFrame, W: pd.DataFrame, sel: list[str], capaci
         "gestión preventiva. Todos los supuestos están a la vista y son editables; la fórmula está al final.</div></div>",
         unsafe_allow_html=True)
     cfg = _cfg()
-    left, right = st.columns([1, 2.2], gap="medium")
+    left, right = st.columns([1, 2.45], gap="medium")
     with left:
         with st.container(border=True):
             st.markdown("**Supuestos del escenario**")
@@ -1074,68 +1156,76 @@ def _scenario_block(queue: pd.DataFrame, W: pd.DataFrame, sel: list[str], capaci
     alto_m = int(managed["_alto_obs"].sum())
 
     with right:
-        k1, k2, k3 = st.columns(3)
-        k1.markdown(kpi_card("Recaudo adicional estimado", fmt_cop(gain_h), f"en {H} semana{'s' if H != 1 else ''} · "
-                             f"{fmt_delta_pp(rec_proj - base)}", tone="bajo", icon="💵"), unsafe_allow_html=True)
-        k2.markdown(kpi_card("Casos con gestión humana", fmt_int(k_h),
-                             (f"incluye {fmt_int(alto_m)} Alto observados" if truth else f"de {fmt_int(n_q)} en la cola")
-                             + (f" · + {fmt_int((W['ruta'] == 'R3').sum())} R3 automáticos" if auto_r3 and 'R3' not in sel
-                                else ""), tone="accent", icon="📞"), unsafe_allow_html=True)
-        k3.markdown(kpi_card("Valor de +1 gestor", fmt_cop(marg), f"{fmt_delta_pp(marg / V if V else 0, 2)} de recaudo en el "
-                             f"horizonte (+{_es(per_g, 0)} gestiones/sem.)", tone="ink", icon="➕",
-                             help="Recaudo adicional que aportaría un gestor más con la misma productividad."),
-                    unsafe_allow_html=True)
-        gcol1, gcol2 = st.columns([1, 1.25], gap="medium")
+        _grid([
+            kpi_card("Recaudo adicional estimado", fmt_cop(gain_h), f"en {H} semana{'s' if H != 1 else ''} · "
+                     f"{fmt_delta_pp(rec_proj - base)} sobre la línea base", tone="bajo", icon="💵"),
+            kpi_card("Casos con gestión humana", fmt_int(k_h),
+                     (f"incluye {fmt_int(alto_m)} Alto observados" if truth else f"de {fmt_int(n_q)} en la cola")
+                     + (f" · + {fmt_int((W['ruta'] == 'R3').sum())} R3 automáticos" if auto_r3 and "R3" not in sel
+                        else ""), tone="accent", icon="📞"),
+            kpi_card("Valor de +1 gestor", fmt_cop(marg), f"{fmt_delta_pp(marg / V if V else 0, 2)} de recaudo en el "
+                     f"horizonte (+{_es(per_g, 0)} gestiones/sem.)", tone="ink", icon="➕",
+                     help="Recaudo adicional que aportaría un gestor más con la misma productividad."),
+        ], min_px=190)
+        st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+        gcol1, gcol2 = st.columns([1.05, 1.15], gap="medium")
         with gcol1:
             with st.container(border=True):
+                st.markdown(f"<div class='cola-mini'><b>Recaudo proyectado</b> · la marca vertical es la línea base "
+                            f"institucional ({fmt_pct(base, 0)}).</div>", unsafe_allow_html=True)
                 figg = go.Figure(go.Indicator(
                     mode="gauge+number+delta", value=rec_proj * 100,
-                    number=dict(suffix=" %", valueformat=".1f", font=dict(size=40, color=p["text"])),
+                    number=dict(suffix=" %", valueformat=".1f", font=dict(size=32, color=p["text"])),
                     delta=dict(reference=base * 100, valueformat=".2f", suffix=" pp", position="bottom",
-                               increasing=dict(color=RISK_COLORS["Bajo"])),
+                               increasing=dict(color=RISK_COLORS["Bajo"]), font=dict(size=15)),
                     gauge=dict(
-                        axis=dict(range=[70, 100], ticksuffix=" %", tickcolor=p["border"],
+                        axis=dict(range=[70, 100], ticksuffix=" %", tickcolor=p["border"], nticks=4,
                                   tickfont=dict(color=p["muted"], size=11)),
-                        bar=dict(color="#FFD100", thickness=0.32), bgcolor=p["surface_2"], borderwidth=0,
+                        bar=dict(color="#FFD100", thickness=0.3), bgcolor=p["surface_2"], borderwidth=0,
                         steps=[dict(range=[70, base * 100], color=_rgba(RISK_COLORS["Alto"], .10)),
-                               dict(range=[base * 100, 100], color=_rgba(RISK_COLORS["Bajo"], .10))],
-                        threshold=dict(line=dict(color=p["text"], width=3), thickness=0.85, value=base * 100),
+                               dict(range=[base * 100, 100], color=_rgba(RISK_COLORS["Bajo"], .12))],
+                        threshold=dict(line=dict(color=p["text"], width=3), thickness=0.9, value=base * 100),
                     ),
-                    title=dict(text=f"Recaudo proyectado<br><span style='font-size:12px;color:{p['muted']}'>"
-                                    f"Línea base {fmt_pct(base, 0)} (marca negra)</span>",
-                               font=dict(size=14, color=p["text"])),
+                    domain=dict(x=[0.12, 0.88], y=[0, 1]),
                 ))
-                figg.update_layout(margin=dict(l=24, r=24, t=64, b=8))
-                show_fig(figg, key="cola_gauge", height=280, legend=False)
+                figg.update_layout(margin=dict(l=10, r=10, t=22, b=4))
+                show_fig(figg, key="cola_gauge", height=196, legend=False)
+                closed = (rec_proj - base) / gap if gap > 0 else 0.0
+                st.markdown(f"<div class='cola-mini' style='text-align:center;margin:0'>La gestión cerraría "
+                            f"<b>{fmt_pct(closed)}</b> de la brecha de no recaudo ({fmt_pct(gap, 0)} de la cartera)."
+                            f"</div>", unsafe_allow_html=True)
         with gcol2:
             with st.container(border=True):
-                xs = ["Línea base"] + ROUTES + ["Proyectado"]
+                st.markdown("<div class='cola-mini'><b>Puente de recaudo por ruta</b> · puntos porcentuales que aporta "
+                            "cada ruta sobre la línea base.</div>", unsafe_allow_html=True)
+                xs = ["Base"] + ROUTES + ["Total"]
                 pp = [by_route[r] / V * 100 if V else 0 for r in ROUTES]
+                tf = dict(color=p["text"], size=11)
                 figb = go.Figure()
-                figb.add_trace(go.Bar(x=["Línea base"], y=[base * 100], marker=dict(color=p["subtle"], cornerradius=4),
-                                      text=[f"{_es(base * 100, 1)} %"], textposition="inside",
-                                      insidetextanchor="end", textfont=dict(color=p["surface"]),
+                figb.add_trace(go.Bar(x=["Base"], y=[base * 100], marker=dict(color=p["subtle"], cornerradius=4),
+                                      text=[f"{_es(base * 100, 1)} %"], textposition="outside", textangle=0,
+                                      textfont=tf, cliponaxis=False, constraintext="none",
                                       hovertemplate="Línea base: %{y:.1f} %<extra></extra>", showlegend=False))
                 acc = base * 100
                 for r, v in zip(ROUTES, pp):
-                    figb.add_trace(go.Bar(x=[r], y=[v], base=[acc], marker=dict(color=_rc(r), cornerradius=2),
-                                          text=[f"+{_es(v, 2)}"] if v > 0 else [""], textposition="outside",
-                                          textfont=dict(color=p["text"], size=11), cliponaxis=False,
+                    figb.add_trace(go.Bar(x=[r], y=[max(v, 0.0)], base=[acc], marker=dict(color=_rc(r), cornerradius=2),
+                                          text=[f"+{_es(v, 2)}"] if v > 0.004 else [""], textposition="outside",
+                                          textangle=0, textfont=tf, cliponaxis=False, constraintext="none",
                                           customdata=[[fmt_cop(by_route[r])]],
                                           hovertemplate=f"{_route_label(r)}<br>+%{{y:.2f}} pp · %{{customdata[0]}}"
                                                         f"<extra></extra>", showlegend=False))
                     acc += v
-                figb.add_trace(go.Bar(x=["Proyectado"], y=[rec_proj * 100], marker=dict(color="#FFD100", cornerradius=4),
-                                      text=[f"{_es(rec_proj * 100, 1)} %"], textposition="inside", insidetextanchor="end",
-                                      textfont=dict(color="#141414"),
+                figb.add_trace(go.Bar(x=["Total"], y=[rec_proj * 100], marker=dict(color="#FFD100", cornerradius=4),
+                                      text=[f"<b>{_es(rec_proj * 100, 1)} %</b>"], textposition="outside", textangle=0,
+                                      textfont=tf, cliponaxis=False, constraintext="none",
                                       hovertemplate="Proyectado: %{y:.2f} %<extra></extra>", showlegend=False))
-                lo = base * 100 - max(1.5, (rec_proj - base) * 100 * 0.8)
-                hi = rec_proj * 100 + max(0.6, (rec_proj - base) * 100 * 0.35)
-                figb.update_layout(barmode="overlay", bargap=0.35, margin=dict(l=8, r=8, t=40, b=8),
-                                   title=dict(text="Puente de recaudo por ruta (pp)", font=dict(size=13)),
-                                   yaxis=dict(title="Recaudo (%)", range=[lo, hi], ticksuffix=" %"),
-                                   xaxis=dict(categoryorder="array", categoryarray=xs))
-                show_fig(figb, key="cola_puente", height=280, legend=False)
+                span = max((rec_proj - base) * 100, 0.3)
+                lo = base * 100 - max(1.0, span * 0.9)
+                hi = rec_proj * 100 + max(0.5, span * 0.45)
+                figb.update_layout(barmode="overlay", bargap=0.3, margin=dict(l=8, r=8, t=18, b=8),
+                                   yaxis=dict(title="Recaudo", range=[lo, hi], ticksuffix=" %"),
+                                   xaxis=dict(categoryorder="array", categoryarray=xs, tickangle=0))
+                show_fig(figb, key="cola_puente", height=236, legend=False)
 
         with st.container(border=True):
             cmax = int(max(capacity * 3, 50))
@@ -1146,7 +1236,7 @@ def _scenario_block(queue: pd.DataFrame, W: pd.DataFrame, sel: list[str], capaci
                         f"primero lo más prioritario.</div>", unsafe_allow_html=True)
             figs = go.Figure()
             figs.add_trace(go.Scatter(x=grid, y=ys, mode="lines", line=dict(color=p["text"], width=2.5), name="Proyectado",
-                                      fill="tozeroy", fillcolor=_rgba("#FFD100", .12),
+                                      fill="tozeroy", fillcolor=_rgba("#FFD100", .08 if _dark() else .14),
                                       hovertemplate="%{x:,d} gestiones/sem.<br>Recaudo: %{y:.2f} %<extra></extra>"))
             figs.add_hline(y=base * 100, line=dict(color=p["muted"], width=1.5, dash="dash"),
                            annotation_text=f"Línea base {fmt_pct(base, 0)}", annotation_position="bottom right",
@@ -1218,7 +1308,10 @@ with e1:
             "dia_pago": queue["fecha_de_pago"], "cuotas": queue["cuotas"],
         })
         rutas_df = stats.assign(nombre=stats["ruta"].map(lambda r: ACTION_ROUTES[r]["nombre"]),
-                                sla=stats["ruta"].map(lambda r: ACTION_ROUTES[r]["sla"]))
+                                sla=stats["ruta"].map(lambda r: ACTION_ROUTES[r]["sla"])).rename(columns={
+            "n": "creditos", "share": "participacion", "exposicion": "valor_financiado", "exp_riesgo": "exposicion_riesgo",
+            "alto_rate": "tasa_alto_observado", "base": "tasa_base", "alto_share": "participacion_alto_observado",
+            "alto_pred": "pct_alto_predicho", "mora": "pct_mora_datacredito", "prioridad": "prioridad_media"})
         params_df = pd.DataFrame({
             "parametro": ["fecha", "origen", "creditos_filtrados", "rutas_en_cola", "capacidad_semanal", "gestores",
                           "reparto", "peso_riesgo", "peso_exposicion", "peso_mora"],
@@ -1242,12 +1335,23 @@ with e1:
         b1, b2 = st.columns(2)
         with b1:
             _lazy_download("CSV", _csv_q, f"cola_gestion_{stamp}.csv", "text/csv", "cola_dl_csv",
-                           icon=":material/download:")
+                           icon=":material/download:", typ="primary")
         with b2:
             _lazy_download("Excel", _xlsx_q, f"cola_gestion_{stamp}.xlsx",
                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "cola_dl_xlsx",
                            icon=":material/table_view:")
-        st.caption("Los archivos se generan al hacer clic (no se recalculan en cada interacción).")
+        files = [("cola", len(exp_df), "posición, semana, gestor, ruta, SLA, acción y datos de cada crédito"),
+                 ("rutas", len(rutas_df), "resumen R1–R4: créditos, exposición, tasa observada y lift"),
+                 ("gestores_semana1", len(gest_df), "carga, exposición y prioridad media por gestor"),
+                 ("parametros", len(params_df), "pesos, capacidad, gestores, rutas y fecha de la corrida")]
+        st.markdown("<div class='cola-files'>" + "".join(
+            f"<div><code>{esc(n)}</code><b>{fmt_int(k)} fila{'s' if k != 1 else ''}</b><span>{esc(d)}</span></div>"
+            for n, k, d in files) + "</div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='cola-mini'>Parámetros de la corrida: pesos {fmt_pct(w['riesgo'], 0)} / "
+            f"{fmt_pct(w['exposicion'], 0)} / {fmt_pct(w['mora'], 0)} · rutas {esc(', '.join(sel_routes))} · "
+            f"{fmt_int(capacity)} gestiones/semana · {n_gest} gestores · reparto {esc(cfg['reparto'] or 'Round-robin')}. "
+            f"Los archivos se generan solo al hacer clic.</div>", unsafe_allow_html=True)
 
 with e2:
     with st.container(border=True):
@@ -1282,22 +1386,33 @@ with e2:
                 st.download_button("JSON (intercambio)", json_b, file_name=f"sat_intercambio_cartera_{stamp}.json",
                                    mime="application/json", key="cola_db04_json", width="stretch",
                                    icon=":material/data_object:", on_click="ignore")
-            with st.expander("📘 Diccionario del esquema (14 campos, orden fijo)"):
-                dic = pd.DataFrame(DB04_SCHEMA, columns=["Campo", "Tipo", "Obligatorio", "Descripción", "Ejemplo"])
-                dic.insert(0, "#", range(1, len(dic) + 1))
-                dic["Obligatorio"] = dic["Obligatorio"].map({True: "Sí", False: "No"})
-                st.dataframe(dic, hide_index=True, key="cola_db04_dic", height=38 + 35 * len(dic),
-                             column_config={"#": st.column_config.NumberColumn(width=40),
-                                            "Descripción": st.column_config.TextColumn(width="large")})
-                st.markdown("- **CSV:** separador `;`, punto decimal, codificación UTF-8 con BOM (abre directo en Excel "
-                            "es-CO), una fila por crédito.\n"
-                            "- **JSON:** objeto con metadatos (`esquema`, `version`, `generado`, `total_registros`, "
-                            "`campos`) y la lista `registros` con los mismos 14 campos.\n"
-                            "- **Llave de integración:** `llave2` (única por crédito). `estado` inicia en `PENDIENTE` y lo "
-                            "actualiza el sistema de cartera (p. ej. CONTACTADO, ACUERDO, NO CONTACTADO).")
-            with st.expander("🧪 Casos de prueba de integración ejecutados"):
-                st.dataframe(pd.DataFrame([{"Resultado": "✅" if t[1] else "❌", "Caso de prueba": t[0], "Detalle": t[2]}
-                                           for t in tests]), hide_index=True, key="cola_db04_tests",
-                             height=38 + 35 * len(tests))
+
+# Expansores a todo el ancho (el diccionario del esquema necesita espacio).
+with st.expander("📘 DB-04 · Diccionario del esquema (14 campos, orden fijo)"):
+    dic = pd.DataFrame(DB04_SCHEMA, columns=["Campo", "Tipo", "Obligatorio", "Descripción", "Ejemplo"])
+    dic.insert(0, "#", range(1, len(dic) + 1))
+    dic["Obligatorio"] = dic["Obligatorio"].map({True: "Sí", False: "No"})
+    st.dataframe(dic, hide_index=True, key="cola_db04_dic", height=38 + 35 * len(dic),
+                 column_config={"#": st.column_config.NumberColumn(width=36),
+                                "Campo": st.column_config.TextColumn(width=130),
+                                "Tipo": st.column_config.TextColumn(width=190),
+                                "Obligatorio": st.column_config.TextColumn(width=86),
+                                "Descripción": st.column_config.TextColumn(width=330),
+                                "Ejemplo": st.column_config.TextColumn(width=180)})
+    st.markdown("- **CSV:** separador `;`, punto decimal, codificación UTF-8 con BOM (abre directo en Excel es-CO), "
+                "una fila por crédito.\n"
+                "- **JSON:** objeto con metadatos (`esquema`, `version`, `generado`, `total_registros`, `campos`) y la "
+                "lista `registros` con los mismos 14 campos.\n"
+                "- **Llave de integración:** `llave2` (única por crédito). `estado` inicia en `PENDIENTE` y lo actualiza "
+                "el sistema de cartera (p. ej. CONTACTADO, ACUERDO, NO CONTACTADO).")
+with st.expander("🧪 DB-04 · Casos de prueba de integración ejecutados"):
+    if plan.empty:
+        st.caption("Sin archivo que validar: la cola de la semana está vacía.")
+    else:
+        st.dataframe(pd.DataFrame([{"OK": "✅" if t[1] else "❌", "Caso de prueba": t[0], "Detalle": t[2]}
+                                   for t in tests]), hide_index=True, key="cola_db04_tests",
+                     height=38 + 35 * len(tests),
+                     column_config={"OK": st.column_config.TextColumn(width=44),
+                                    "Caso de prueba": st.column_config.TextColumn(width=300)})
 
 footer()
