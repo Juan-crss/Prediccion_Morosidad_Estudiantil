@@ -31,7 +31,7 @@ _DIMS = {"Segmento": "programa_cluster", "Facultad": "facultad", "Tipo de inter�
 _LINKS = [
     ("cola", "Priorizar casos", "Lista ordenada por prioridad con rutas R1–R4 y exportación."),
     ("segmentos", "Segmentos y territorio", "Perfiles de riesgo por programa, scoring y mapa por departamento."),
-    ("modelo", "Auditar el modelo", "Métricas por clase, curvas ROC/PR y simulador de umbral."),
+    ("modelo", "Auditar el modelo", "Métricas por clase, curvas ROC y umbral de alerta para Alto."),
     ("carga", "Cargar y predecir", "Puntuar un archivo nuevo de créditos con el modelo."),
 ]
 
@@ -530,7 +530,7 @@ else:
                                 f"clase más probable.{thr_txt}", tone="alto" if low else "bajo",
                                 icon="⚠️" if low else "✅"), unsafe_allow_html=True)
             if can_access("modelo"):
-                st.page_link(PAGES["modelo"][0], label="Abrir el simulador de umbral en Desempeño del modelo",
+                st.page_link(PAGES["modelo"][0], label="Ajustar el umbral de alerta en Desempeño del modelo",
                              icon=":material/tune:")
 
 # ---- 6. Reporte + accesos rápidos ----

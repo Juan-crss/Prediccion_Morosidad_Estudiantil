@@ -129,9 +129,9 @@ def _css() -> None:
 .cg-light .dot{flex:0 0 18px;height:18px;border-radius:50%}
 .cg-light .ttl{font-weight:800;color:var(--sat-text);font-size:15px}
 .cg-light .txt{color:var(--sat-muted);font-size:13.5px}
-.cg-eng{padding:12px 14px;border-radius:14px;border:1px solid var(--sat-border);background:var(--sat-surface);height:100%}
+.cg-eng{padding:12px 14px;border-radius:14px;border:1px solid var(--sat-border);background:var(--sat-surface);min-height:96px}
 .cg-eng .h{display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:700;color:var(--sat-text)}
-.cg-eng .x{font-size:12.5px;color:var(--sat-muted);margin-top:6px;word-break:break-all}
+.cg-eng .x{font-size:12.5px;color:var(--sat-muted);margin-top:6px;overflow-wrap:anywhere}
 @media (max-width: 900px){.cg-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>""", unsafe_allow_html=True)
 
@@ -283,6 +283,7 @@ with st.container(border=True):
             st.error("**Columnas faltantes:** " + ", ".join(f"`{c}`" for c in missing))
         dims = {k: v for k, v in (ss.get("carga_score") or {}).items() if k != "Global"}
         if dims:
+            st.write("")
             st.caption("Cumplimiento por dimensión: " + " · ".join(f"**{k}** {fmt_pct(v)}" for k, v in dims.items()))
         with st.expander(f"Ver reglas con incumplimientos ({len(fails)})", expanded=False):
             if fails.empty:
@@ -325,7 +326,7 @@ with st.container(border=True):
         b = badge("Disponible", "bajo") if has_pred else badge("No aplica", "neutral")
         x = ("El archivo trae la columna <code>y_pred</code>." if has_pred
              else "Sirve si el archivo ya viene puntuado (columna <code>y_pred</code>).")
-        st.markdown(f"<div class='cg-eng'><div class='h'>📄 Predicción del archivo {b}</div><div class='x'>{x}</div></div>",
+        st.markdown(f"<div class='cg-eng'><div class='h'>📄 y_pred del archivo {b}</div><div class='x'>{x}</div></div>",
                     unsafe_allow_html=True)
     with st.expander("¿Cómo habilitar un motor de predicción?"):
         st.markdown("**API** — en `.streamlit/secrets.toml` (o variable de entorno `SAT_API_URL`):")
