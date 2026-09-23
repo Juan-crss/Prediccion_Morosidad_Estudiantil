@@ -198,14 +198,12 @@ with tab2:
     pc = pd.DataFrame(sel["por_clase"])
     pc = pc.set_index("clase").reindex(RISK_ORDER).reset_index()
     pc_view = pd.DataFrame({
-        "Clase": pc["clase"], "Precisión": pc["precision"], "Recall": pc["recall"], "F1": pc["f1"],
-        "AUC": pc["auc"], "Soporte (real)": pc["soporte"], "Predichos": pc["predichos"],
+        "Clase": pc["clase"],
+        **{lab: [_n(v) for v in pc[col]] for col, lab in [("precision", "Precisión"), ("recall", "Recall"),
+                                                          ("f1", "F1"), ("auc", "AUC")]},
+        "Soporte (real)": [fmt_int(v) for v in pc["soporte"]], "Predichos": [fmt_int(v) for v in pc["predichos"]],
     })
-    pcfg = {c: st.column_config.ProgressColumn(c, min_value=0.0, max_value=1.0, format="%.3f")
-            for c in ["Precisión", "Recall", "F1", "AUC"]}
-    pcfg["Soporte (real)"] = st.column_config.NumberColumn(format="localized")
-    pcfg["Predichos"] = st.column_config.NumberColumn(format="localized")
-    st.dataframe(pc_view, hide_index=True, width="stretch", column_config=pcfg)
+    st.dataframe(pc_view, hide_index=True, width="stretch")
 
     by = {r["clase"]: r for r in sel["por_clase"]}
     if all(c in by for c in RISK_ORDER):
@@ -217,6 +215,7 @@ with tab2:
             insight("Medio: muy escaso", f"Solo {fmt_int(by['Medio']['soporte'])} casos en prueba; AUC "
                     f"{_n(by['Medio']['auc'])} pero métricas inestables.", tone="medio", icon="🟠"),
         ])
+        st.write("")
 
     c1, c2 = st.columns(2, gap="medium")
     with c1:
@@ -323,12 +322,9 @@ with tab3:
             if best_f1:
                 cmp_rows.append((f"Máx. F1 ({_n(best_f1['umbral'], 2)})", best_f1["recall"], best_f1["precision"],
                                  best_f1["pct_alertas"]))
-            cdf = pd.DataFrame(cmp_rows, columns=["Regla", "Recall Alto", "Precisión", "% cartera"])
-            st.dataframe(cdf, hide_index=True, width="stretch", column_config={
-                "Recall Alto": st.column_config.ProgressColumn(min_value=0.0, max_value=1.0, format="%.3f"),
-                "Precisión": st.column_config.NumberColumn(format="%.3f"),
-                "% cartera": st.column_config.NumberColumn(format="percent"),
-            })
+            cdf = pd.DataFrame([(r, _n(a), _n(b), fmt_pct(c)) for r, a, b, c in cmp_rows],
+                               columns=["Regla", "Recall Alto", "Precisión", "% cartera"])
+            st.dataframe(cdf, hide_index=True, width="stretch")
             st.markdown(insight(
                 "Argmax subdetecta Alto",
                 f"Con la clase más probable el recall Alto es <b>{_n(argmax.get('recall'))}</b>. Con P(Alto) ≥ "
