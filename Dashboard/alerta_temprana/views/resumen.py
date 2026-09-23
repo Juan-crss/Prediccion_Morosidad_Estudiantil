@@ -39,9 +39,9 @@ _DIMS = {
     "Tipo de interés": "tipo_interes",
     "Scoring externo": "score_corto",
     "Cohorte": "cohorte",
-    "Nivel": "nivel",
 }
-_DIM_SINGULAR = {v: k.lower() for k, v in _DIMS.items()}
+_DIM_SHORT = {"Segmento de programa": "Segmento", "Tipo de interés": "Interés", "Scoring externo": "Scoring"}
+_DIM_SINGULAR = {**{v: k.lower() for k, v in _DIMS.items()}, "nivel": "nivel", "sede": "sede"}
 _QUICK_LINKS = [
     ("cola", "Priorizar casos", "Lista ordenada por índice de prioridad, con rutas R1–R4 y exportación."),
     ("geografia", "Ubicar el riesgo", "Dónde se concentran los créditos en alerta por departamento y ciudad."),
@@ -122,7 +122,11 @@ _CSS = """
 .rs-route-name{font-weight:700;color:var(--sat-text);font-size:14px;margin-top:2px}
 .rs-route-a{font-size:12.5px;color:var(--sat-muted);margin-top:4px;line-height:1.4}
 .rs-link-t{font-weight:700;color:var(--sat-text);font-size:15px}
-.rs-link-d{font-size:12.8px;color:var(--sat-muted);line-height:1.4;min-height:36px}
+.rs-link-d{font-size:12.8px;color:var(--sat-muted);line-height:1.4;min-height:54px}
+.rs-kpi .sat-kpi .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-kpi .sat-kpi .val{white-space:nowrap}
+.rs-kpi .sat-kpi .sub{min-height:34px}
+.rs-kpi .sat-kpi .delta{white-space:nowrap}
 </style>
 """
 
@@ -275,8 +279,8 @@ def _compare(d: pd.DataFrame, mask_a, mask_b) -> dict:
             "lift": pa / pb if nb and pb else NAN}
 
 
-def _x(v) -> str:
-    return "—" if _isnan(v) else f"{fmt_num(v, 1)}×"
+def _x(v, decimals: int = 1) -> str:
+    return "—" if _isnan(v) else f"{fmt_num(v, decimals)}×"
 
 
 # ======================================================================================
@@ -410,11 +414,24 @@ def _evolution_fig(d: pd.DataFrame, gran: str, measure: str) -> tuple[go.Figure 
         fig.add_hline(y=avg, line=dict(color=p["muted"], width=1, dash="dot"), row=1, col=1)
         fig.add_annotation(x=0, xref="x domain", y=avg, yref="y", text=f"Promedio {fmt_pct(avg)}", showarrow=False,
                            xanchor="left", yanchor="bottom", font=dict(size=11, color=p["muted"]), yshift=2)
-    if len(share.dropna()):
-        last_i = int(np.where(share.notna())[0][-1])
-        fig.add_annotation(x=labels[last_i], y=share.iloc[last_i], xref="x", yref="y", text=f"<b>{fmt_pct(share.iloc[last_i])}</b>",
-                           showarrow=False, xanchor="left", xshift=7, font=dict(size=12, color=p["text"]))
-    unit = "M" if money else "créditos"
+    # Último periodo incompleto (volumen muy inferior a la mediana reciente)
+    partial = False
+    if len(cnt) >= 4:
+        med = float(cnt.iloc[:-1].tail(12).median())
+        partial = med > 0 and cnt.iloc[-1] < 0.35 * med
+    valid = np.where(share.notna().to_numpy())[0]
+    if partial:
+        valid = valid[valid < len(share) - 1]
+    if len(valid):
+        last_i = int(valid[-1])
+        fig.add_annotation(x=labels[last_i], y=share.iloc[last_i], xref="x", yref="y",
+                           text=f"<b>{fmt_pct(share.iloc[last_i])}</b>", showarrow=False, xanchor="left", yanchor="bottom",
+                           xshift=4, yshift=2, font=dict(size=12, color=p["text"]))
+        peak_i = int(valid[np.argmax(share.to_numpy()[valid])])
+        if peak_i != last_i and share.iloc[peak_i] > 1.25 * share.iloc[last_i]:
+            fig.add_annotation(x=labels[peak_i], y=share.iloc[peak_i], xref="x", yref="y",
+                               text=f"máx. {fmt_pct(share.iloc[peak_i])} · {labels[peak_i]}", showarrow=False,
+                               xanchor="right", yanchor="bottom", xshift=-6, font=dict(size=11, color=p["muted"]))
     for r in RISK_ORDER:
         vals = piv[r]
         pct = (vals / tot.replace(0, np.nan)).fillna(0)
@@ -425,22 +442,24 @@ def _evolution_fig(d: pd.DataFrame, gran: str, measure: str) -> tuple[go.Figure 
             customdata=cd,
             hovertemplate=f"<b>{r}</b>: " + ("$ %{customdata[0]} M" if money else "%{customdata[0]} créditos")
                           + " (%{customdata[1]})<extra></extra>"), row=2, col=1)
-    # Último periodo incompleto
-    note = ""
-    if len(cnt) >= 4:
-        med = float(cnt.iloc[:-1].tail(12).median())
-        if med > 0 and cnt.iloc[-1] < 0.35 * med:
-            fig.add_annotation(x=labels[-1], y=float(tot.iloc[-1]), xref="x2", yref="y2", text="parcial", showarrow=False,
-                               yanchor="bottom", yshift=4, font=dict(size=10, color=p["muted"]))
-            note = f"{labels[-1]} tiene solo {fmt_int(cnt.iloc[-1])} créditos (periodo incompleto): lea su % con cautela."
-    k = max(1, math.ceil(len(labels) / 12))
-    fig.update_xaxes(type="category", tickmode="array", tickvals=labels[::k], tickangle=0, row=2, col=1)
+    note = (f"{labels[-1]} tiene solo {fmt_int(cnt.iloc[-1])} créditos (periodo en curso o incompleto): lea su % con "
+            f"cautela." if partial else "")
+    # Marcas del eje: una por año cuando la serie es larga
+    idx = [str(x) for x in piv.index]
+    starts = {"Mes": "-01", "Trimestre": "Q1", "Semestre": "-S1"}[gran]
+    yr_pos = [i for i, x in enumerate(idx) if x.endswith(starts)]
+    if len(labels) > 12 and len(yr_pos) >= 2:
+        tickvals, ticktext = [labels[i] for i in yr_pos], [idx[i][:4] for i in yr_pos]
+    else:
+        k = max(1, math.ceil(len(labels) / 8))
+        tickvals = ticktext = labels[::k]
+    fig.update_xaxes(type="category", tickmode="array", tickvals=tickvals, ticktext=ticktext, tickangle=0, row=2, col=1)
     fig.update_xaxes(type="category", showticklabels=False, row=1, col=1)
     ymax = float(np.nanmax(share.to_numpy())) if share.notna().any() else 0.1
-    fig.update_yaxes(tickformat=".0%", range=[0, max(ymax * 1.3, 0.02)], nticks=3, title_text="% Alto", row=1, col=1)
+    fig.update_yaxes(tickformat=".0%", range=[0, max(ymax * 1.35, 0.02)], nticks=3, title_text="% Alto", row=1, col=1)
     fig.update_yaxes(title_text="Millones de COP" if money else "Créditos", row=2, col=1)
-    fig.update_layout(barmode="stack", bargap=0.22, hovermode="x unified", margin=dict(l=8, r=46, t=34, b=8),
-                      legend=dict(y=1.06, x=0, traceorder="normal"))
+    fig.update_layout(barmode="stack", bargap=0.22, hovermode="x unified", margin=dict(l=8, r=52, t=26, b=8),
+                      legend=dict(y=1.0, yanchor="bottom", x=0, traceorder="normal"))
     return fig, note
 
 
@@ -483,11 +502,11 @@ def _mix_fig(s: dict) -> go.Figure:
         shares = [0 if _isnan(v) else v for v in shares]
         fig.add_trace(go.Bar(
             y=rows, x=shares, name=r, orientation="h", marker=dict(color=RISK_COLORS[r], line=dict(width=0)),
-            text=[fmt_pct(v) if v >= 0.07 else "" for v in shares], textposition="inside", insidetextanchor="middle",
+            text=[fmt_pct(v) if v >= 0.12 else "" for v in shares], textposition="inside", insidetextanchor="middle",
             textfont=dict(color="#141414" if r == "Medio" else "#FFFFFF", size=12), width=0.52,
             customdata=[fmt_pct(v) for v in shares],
             hovertemplate=f"<b>{r}</b> · %{{y}}: %{{customdata}}<extra></extra>"))
-    fig.update_layout(barmode="stack", bargap=0.35, margin=dict(l=8, r=8, t=34, b=8))
+    fig.update_layout(barmode="stack", bargap=0.35, margin=dict(l=8, r=8, t=34, b=8), legend=dict(traceorder="normal"))
     fig.update_xaxes(range=[0, 1], tickformat=".0%", showgrid=True)
     fig.update_yaxes(autorange="reversed", showgrid=False, ticksuffix="  ")
     return fig
@@ -505,12 +524,12 @@ def _top_fig(tab: pd.DataFrame, col: str, global_alto: float) -> go.Figure:
     cd = np.c_[
         [esc(_seg_label(col, v)) for v in t["segmento"]],
         [fmt_int(v) for v in t["creditos"]], [fmt_int(v) for v in t["n_alto"]], [fmt_pct(v) for v in t["pct_alto"]],
-        [_x(v) for v in t["lift"]], [fmt_cop(v) for v in t["exposicion_alto"]], [fmt_pct(v) for v in t["pct_mora"]],
+        [_x(v, 2) for v in t["lift"]], [fmt_cop(v) for v in t["exposicion_alto"]], [fmt_pct(v) for v in t["pct_mora"]],
         t["segmento"].astype(str).to_numpy(),
     ]
     fig = go.Figure(go.Bar(
         y=labels, x=t["pct_alto"], orientation="h", marker=dict(color=colors, line=dict(width=0)),
-        text=[f"<b>{fmt_pct(a)}</b> · {_x(l)}" for a, l in zip(t["pct_alto"], t["lift"])], textposition="outside",
+        text=[f"<b>{fmt_pct(a)}</b> · {_x(l, 2)}" for a, l in zip(t["pct_alto"], t["lift"])], textposition="outside",
         cliponaxis=False, textfont=dict(color=p["text"], size=12), customdata=cd,
         hovertemplate=("<b>%{customdata[0]}</b><br>% en Alto: %{customdata[3]} (lift %{customdata[4]})"
                        "<br>Créditos: %{customdata[1]} · en Alto: %{customdata[2]}"
@@ -767,10 +786,10 @@ periods = sorted(str(x) for x in dff["periodo"].dropna().unique() if str(x) != "
 period_txt = (f"Aprobaciones {fmt_period(periods[0])} – {fmt_period(periods[-1])}" if periods else "Sin fechas de aprobación")
 page_header(
     "Resumen ejecutivo",
-    "Cuánta cartera está en riesgo, dónde se concentra y qué hacer primero: la vista de decisión para Dirección "
-    "Financiera y Gestión de Cartera.",
+    "Cuánta cartera está en riesgo según el modelo Random Forest, dónde se concentra y qué hacer primero: la vista "
+    "de decisión para Dirección Financiera y Gestión de Cartera.",
     eyebrow="Visión general · Dirección y Cartera",
-    meta=[period_txt, "Modelo: Random Forest"],
+    meta=[period_txt],
     highlight=f"{fmt_int(n_alto_hero)} créditos en alerta alta",
 )
 filter_chips(active_chips(df_all))
@@ -784,7 +803,7 @@ if dff.empty:
 S = _stats(dff)
 
 # ---------- Barra de herramientas: ventana de comparación + reporte ----------
-tb1, tb2, tb3, tb4 = st.columns([1.05, 2.2, 0.95, 1.25], vertical_alignment="center")
+tb1, tb2, tb3, tb4 = st.columns([1.0, 2.3, 0.9, 1.15], vertical_alignment="bottom")
 with tb1:
     win_lbl = st.segmented_control("Comparar tendencia", list(_WINDOWS), default="6 m", key=f"{P}_win",
                                    help="Los deltas comparan los últimos N meses del filtro contra los N meses "
@@ -805,53 +824,56 @@ if periods:
         rec_s, prev_s = _stats(rec_df), _stats(prev_df)
         window_txt = (f"últimos {N} meses ({_window_label(r_from, end)}, {fmt_int(len(rec_df))} créditos) vs. "
                       f"{N} meses previos ({_window_label(p_from, p_to)}, {fmt_int(len(prev_df))} créditos)")
+        window_html = (f"Deltas ▲▼: <b>{esc(_window_label(r_from, end))}</b> vs. <b>{esc(_window_label(p_from, p_to))}</b>"
+                       f"<br>{fmt_int(len(rec_df))} vs. {fmt_int(len(prev_df))} créditos · mismos filtros, periodo móvil")
     else:
         window_txt = f"sin {N} meses previos con volumen suficiente para comparar"
+if not cmp_ok:
+    window_html = f"Deltas ▲▼: <b>{esc(window_txt)}</b>"
 with tb2:
-    st.markdown(f"<div class='rs-window'>Deltas de tendencia: <b>{esc(window_txt)}</b>.</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='rs-window'>{window_html}</div>", unsafe_allow_html=True)
 preview_slot = tb3.empty()
 download_slot = tb4.empty()
 
 # ---------- (a) KPI principales ----------
-suffix = f"vs {N} m previos"
+suffix = f"· {N} m"
+no_cmp = ("■ sin comparación", "flat")
 if cmp_ok:
     d_n = _delta_rel(rec_s["n"], prev_s["n"], suffix)
     d_alto = _delta_pp(rec_s["pct_alto"], prev_s["pct_alto"], suffix)
     d_mora = _delta_pp(rec_s["pct_mora"], prev_s["pct_mora"], suffix)
     d_monto = _delta_rel(rec_s["monto"], prev_s["monto"], suffix)
-    d_malto = _delta_pp(rec_s["pct_monto_alto"], prev_s["pct_monto_alto"], suffix)
+    d_n, d_alto, d_mora, d_monto = [d if d[0] else no_cmp for d in (d_n, d_alto, d_mora, d_monto)]
 else:
-    d_n = d_alto = d_mora = d_monto = d_malto = (None, "flat")
+    d_n = d_alto = d_mora = d_monto = no_cmp
 
 mon = _monthly(dff).tail(12)
-spark_cap = f"Últimos {len(mon)} meses del filtro"
+spark_cap = f"Serie mensual · últimos {len(mon)} meses del filtro"
 ink = p["text"]
 kpis = [
     {"label": "Créditos filtrados", "value": fmt_int(S["n"]),
-     "sub": f"{fmt_int(S['est'])} estudiantes · {fmt_pct(_div(S['n'], len(df_all)))} de la cartera",
+     "sub": f"{fmt_int(S['est'])} estudiantes · {fmt_pct(_div(S['n'], len(df_all)), 0)} de la cartera activa",
      "tone": "ink", "delta": d_n[0], "dir": d_n[1], "spark": mon["n"], "color": ink, "icon": "📄",
-     "help": "Número total de créditos que cumplen los filtros activos."},
+     "help": "Número total de créditos que cumplen los filtros activos. Delta: variación del volumen aprobado."},
     {"label": "En riesgo Alto (predicho)", "value": fmt_int(S["n_Alto"]),
      "sub": f"{fmt_pct(S['pct_alto'])} de los créditos filtrados", "tone": "alto", "delta": d_alto[0], "dir": d_alto[1],
      "spark": mon["alto"], "color": RISK_COLORS["Alto"], "icon": "🔴",
-     "help": "Cantidad y porcentaje de créditos que el modelo clasifica en riesgo Alto."},
+     "help": "Cantidad y porcentaje de créditos que el modelo clasifica en riesgo Alto. Delta: cambio del % Alto en pp."},
     {"label": "Mora real · Datacrédito", "value": fmt_pct(S["pct_mora"]),
      "sub": f"{fmt_int(S['n_mora'])} créditos con reporte de mora", "tone": "medio", "delta": d_mora[0], "dir": d_mora[1],
      "spark": mon["mora"], "color": RISK_COLORS["Medio"], "icon": "🏦",
      "help": "Porcentaje de créditos con mora reportada por Datacrédito (dato observado, no predicción)."},
     {"label": "Monto financiado total", "value": fmt_cop(S["monto"]),
-     "sub": f"Ticket promedio {fmt_cop(S['ticket'])}", "tone": "accent", "delta": d_monto[0], "dir": d_monto[1],
-     "spark": mon["monto"], "color": ink, "icon": "💰", "help": "Suma del valor financiado de los créditos filtrados."},
-    {"label": "Monto en riesgo Alto", "value": fmt_cop(S["monto_Alto"]),
-     "sub": f"{fmt_pct(S['pct_monto_alto'])} del monto financiado", "tone": "alto", "delta": d_malto[0], "dir": d_malto[1],
-     "spark": mon["monto_alto"], "color": RISK_COLORS["Alto"], "icon": "⚠️",
-     "help": "Valor financiado de los créditos clasificados en riesgo Alto (exposición)."},
+     "sub": f"Ticket promedio {fmt_cop(S['ticket'])} · {fmt_cop(S['monto_Alto'])} en Alto", "tone": "accent",
+     "delta": d_monto[0], "dir": d_monto[1], "spark": mon["monto"], "color": ink, "icon": "💰",
+     "help": "Suma del valor financiado de los créditos filtrados. Delta: variación del monto aprobado."},
 ]
 cols = st.columns(len(kpis), gap="small")
 for c_, k in zip(cols, kpis):
     html_ = kpi_card(k["label"], k["value"], k["sub"], tone=k["tone"], delta=k["delta"], delta_dir=k["dir"],
                      icon=k["icon"], help=k["help"])
-    c_.markdown(_with_spark(html_, k["spark"], k["color"], spark_cap), unsafe_allow_html=True)
+    c_.markdown(f"<div class='rs-kpi'>{_with_spark(html_, k['spark'], k['color'], spark_cap)}</div>",
+                unsafe_allow_html=True)
 
 # ---------- (b) Tarjetas por categoría de riesgo ----------
 section("Monto financiado por categoría de riesgo", "Número de créditos, participación y dinero comprometido en "
@@ -928,13 +950,17 @@ with ec2:
 section("Dónde se concentra el riesgo", "Segmentos ordenados por % de créditos en riesgo Alto. Lift = % Alto del "
         "segmento ÷ promedio del filtro. Haga clic en una barra para ver su detalle.", kicker="Concentración")
 with st.container(border=True):
-    k1, k2, k3 = st.columns([3.2, 0.9, 0.9], vertical_alignment="bottom")
-    dim_lbl = k1.segmented_control("Dimensión", list(_DIMS), default="Segmento de programa", key=f"{P}_dim") \
-        or "Segmento de programa"
-    min_n = int(k2.number_input("n mínimo", min_value=1, max_value=2000, value=30, step=5, key=f"{P}_minn",
-                                help="Solo se muestran segmentos con al menos este número de créditos."))
-    top_n = int(k3.number_input("Top", min_value=3, max_value=25, value=10, step=1, key=f"{P}_topn",
-                                help="Número de segmentos a mostrar."))
+    k1, k2 = st.columns([4, 1.1], vertical_alignment="bottom")
+    dim_lbl = k1.segmented_control("Dimensión de análisis", list(_DIMS), default="Segmento de programa", key=f"{P}_dim",
+                                   format_func=lambda v: _DIM_SHORT.get(v, v)) or "Segmento de programa"
+    cur_min = int(st.session_state.get(f"{P}_minn", 30) or 30)
+    cur_top = int(st.session_state.get(f"{P}_topn", 10) or 10)
+    with k2.popover(f"n ≥ {fmt_int(cur_min)} · Top {cur_top}", icon=":material/tune:", width="stretch"):
+        min_n = int(st.number_input("n mínimo de créditos por segmento", min_value=1, max_value=2000, value=30, step=5,
+                                    key=f"{P}_minn", help="Evita conclusiones sobre segmentos con muy pocos créditos. "
+                                                          "También aplica a los hallazgos automáticos."))
+        top_n = int(st.number_input("Segmentos a mostrar", min_value=3, max_value=25, value=10, step=1,
+                                    key=f"{P}_topn"))
     dim_col = _DIMS[dim_lbl]
     seg_all = _seg_table(dff, dim_col, min_n, S["pct_alto"])
     seg_top = seg_all.head(top_n)
@@ -964,8 +990,8 @@ with st.container(border=True):
         if st.session_state.get(pick_key) not in options:
             st.session_state.pop(pick_key, None)
         with g2:
-            pick = st.selectbox("Segmento", options, key=pick_key, format_func=lambda v: _seg_label(dim_col, v),
-                                label_visibility="collapsed")
+            pick = st.selectbox("Segmento a detallar", options, key=pick_key,
+                                format_func=lambda v: _seg_label(dim_col, v))
             st.markdown(_segment_detail_html(dff, dim_col, pick, S["pct_alto"], dim_lbl), unsafe_allow_html=True)
             if can_access("segmentos"):
                 st.page_link(PAGES["segmentos"][0], label="Profundizar en Segmentos y perfiles",
