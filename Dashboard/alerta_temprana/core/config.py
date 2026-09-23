@@ -206,9 +206,6 @@ PAGE_ACCESS = {
     "carga": {"admin", "cartera", "analitica"},
 }
 
-    "metodologia": {"admin", "cartera", "direccion", "analitica"},
-}
-
 # ================= Etiquetas legibles =================
 FIELD_LABELS = {
     "nombre": "Estudiante", "id_estudiante": "ID estudiante", "llave2": "Llave crédito",
