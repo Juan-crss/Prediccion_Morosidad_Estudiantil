@@ -26,6 +26,18 @@ inject_css()
 logo_dark = ASSETS_DIR / "logo_uni_dark.png"
 st.logo(str(logo_dark if theme_mode() == "dark" and logo_dark.exists() else LOGO_PATH), size="large")
 
+# Recordar la página pedida en la URL (enlace directo) para abrirla después del login:
+# antes de autenticarse no se llama a st.navigation y Streamlit vuelve a la página por defecto.
+NEXT_KEY = "_sat_next_page"
+if "sat_user" not in st.session_state and NEXT_KEY not in st.session_state:
+    try:
+        from urllib.parse import urlparse
+
+        _path = urlparse(st.context.url or "").path.rstrip("/").rsplit("/", 1)[-1]
+    except Exception:
+        _path = ""
+    st.session_state[NEXT_KEY] = _path if _path in PAGES else ""
+
 user = require_login()
 
 # ---------- Navegación según rol ----------
@@ -39,6 +51,9 @@ for k, pg_ in pages_by_key.items():
     groups.setdefault(PAGES[k][3], []).append(pg_)
 nav = st.navigation({g: groups[g] for g in GROUP_ORDER if g in groups})
 current_key = next((k for k, p in pages_by_key.items() if p.url_path == nav.url_path), None)
+_next = st.session_state.pop(NEXT_KEY, "")
+if _next and _next in pages_by_key and _next != current_key:
+    st.switch_page(pages_by_key[_next])
 
 # ---------- Barra lateral ----------
 with st.sidebar:
