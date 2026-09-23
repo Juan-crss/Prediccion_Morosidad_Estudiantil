@@ -126,7 +126,7 @@ def _rgba(hex_color: str, a: float) -> str:
 
 
 def _nb(text) -> str:
-    return str(text).replace(" ", "&nbsp;")
+    return str(text).replace(" ", "\u00a0")
 
 
 def _is_na(x) -> bool:
@@ -449,10 +449,9 @@ def _fig_timeline(cr: pd.DataFrame, sel_llave: str) -> go.Figure:
             s["ruta"].astype(str),
         ], axis=-1)
         fig.add_trace(go.Scatter(
-            x=s["fecha_aprobacion"], y=s["valor_financiacion"], mode="markers+text", name=f"Riesgo {rk}",
+            x=s["fecha_aprobacion"], y=s["valor_financiacion"], mode="markers", name=f"Riesgo {rk}",
             marker=dict(color=RISK_COLORS.get(rk, p["subtle"]), size=15, line=dict(color=p["surface"], width=2)),
-            text=[fmt_cop(v) for v in s["valor_financiacion"]], textposition="top center",
-            textfont=dict(color=p["text"], size=11), customdata=cd,
+            customdata=cd,
             hovertemplate=("<b>Crédito %{customdata[0]}</b><br>Aprobado: %{customdata[1]}<br>"
                            "Valor financiado: %{customdata[2]}<br>Cuotas: %{customdata[3]} · %{customdata[4]}<br>"
                            "Riesgo predicho: " + rk + " (confianza %{customdata[5]})<br>"
@@ -463,6 +462,11 @@ def _fig_timeline(cr: pd.DataFrame, sel_llave: str) -> go.Figure:
         fig.add_trace(go.Scatter(
             x=sel["fecha_aprobacion"], y=sel["valor_financiacion"], mode="markers", name="Crédito analizado",
             marker=dict(size=30, color="rgba(0,0,0,0)", line=dict(color=YELLOW, width=3)), hoverinfo="skip"))
+    for _, r in c.iterrows():
+        is_sel = r["llave2"] == sel_llave
+        fig.add_annotation(x=r["fecha_aprobacion"], y=r["valor_financiacion"], text=f"<b>{fmt_cop(r['valor_financiacion'])}</b>"
+                           if is_sel else fmt_cop(r["valor_financiacion"]), showarrow=False, yshift=24 if is_sel else 18,
+                           font=dict(size=11.5, color=p["text"]))
     if not c.empty:
         x0 = c["fecha_aprobacion"].min() - pd.DateOffset(months=2)
         x1 = max(c["_fin"].max(), c["fecha_aprobacion"].max()) + pd.DateOffset(months=2)
@@ -489,7 +493,7 @@ def _fig_peers(pt: pd.DataFrame) -> go.Figure:
     colors = [YELLOW if o else p["text"] for o in outlier]
     texts = [f"<b>p{fmt_num(v, 0)}</b> · {_fmt_metric(val, k)}" for v, val, k in zip(d["percentil"], d["valor"],
                                                                                      d["kind"])]
-    pos = ["middle right" if v <= 62 else "middle left" for v in d["percentil"]]
+    pos = ["top center"] * len(d)
     cd = np.stack([
         [_fmt_metric(v, k) for v, k in zip(d["valor"], d["kind"])],
         [_fmt_metric(v, k) for v, k in zip(d["mediana"], d["kind"])],
@@ -499,7 +503,7 @@ def _fig_peers(pt: pd.DataFrame) -> go.Figure:
     ], axis=-1)
     fig.add_trace(go.Scatter(
         x=d["percentil"], y=labels, mode="markers+text", text=texts, textposition=pos,
-        textfont=dict(color=p["text"], size=12), showlegend=False,
+        textfont=dict(color=p["text"], size=12), showlegend=False, cliponaxis=False,
         marker=dict(size=15, color=colors, line=dict(color=p["text"], width=1.5)), customdata=cd,
         hovertemplate=("<b>%{y}</b><br>Estudiante: %{customdata[0]} · percentil %{customdata[3]}<br>"
                        "Mediana de pares: %{customdata[1]}<br>Rango típico (p25–p75): %{customdata[2]}<br>"
@@ -776,6 +780,7 @@ def _css() -> None:
         .fx-prio{margin-top:10px;}
         .fx-prio .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:12.5px;
           color:var(--sat-muted);}
+        .fx-prio .row span:last-child{white-space:nowrap;}
         .fx-prio .row b{font-family:'Space Grotesk','Inter',sans-serif;font-size:20px;color:var(--sat-text);}
         .fx-stack{display:flex;height:10px;border-radius:6px;overflow:hidden;gap:2px;background:var(--sat-surface-2);
           margin-top:6px;border:1px solid var(--sat-border);}
@@ -913,7 +918,7 @@ if force_id and ss.get(SEL_KEY, force_id) != force_id:
     force_id = None
 
 with st.container(border=True):
-    c_sel, c_ord, c_prev, c_next = st.columns([4.4, 2.1, 0.75, 0.75], vertical_alignment="bottom", gap="small")
+    c_sel, c_ord, c_prev, c_next = st.columns([3.7, 1.9, 1.15, 1.25], vertical_alignment="bottom", gap="small")
     with c_ord:
         mode = st.selectbox("Ordenar la navegación por", ORDER_MODES, key="ficha_orden", help=ORDER_HELP,
                             persist_state="session")
@@ -937,12 +942,10 @@ with st.container(border=True):
     pos = ids.index(sid)
     with c_prev:
         st.button("Anterior", icon=":material/chevron_left:", key="ficha_prev", width="stretch", on_click=_step,
-                  args=(ids, -1), disabled=pos == 0, shortcut="Shift+Left",
-                  help="Estudiante anterior en el orden de navegación (Shift + ←)")
+                  args=(ids, -1), disabled=pos == 0, help="Estudiante anterior en el orden de navegación")
     with c_next:
         st.button("Siguiente", icon=":material/chevron_right:", key="ficha_next", width="stretch", on_click=_step,
-                  args=(ids, 1), disabled=pos >= len(ids) - 1, shortcut="Shift+Right",
-                  help="Siguiente estudiante en el orden de navegación (Shift + →)")
+                  args=(ids, 1), disabled=pos >= len(ids) - 1, help="Siguiente estudiante en el orden de navegación")
 ss[FICHA_KEY] = sid
 ss[CONSUMED_KEY] = sid
 
@@ -1013,13 +1016,16 @@ first_name = str(rec["nombre"]).split(" ")[0]
 # Rango de prioridad dentro del filtro (a nivel de estudiante, crédito de referencia).
 prio_vals = stu["prioridad"].to_numpy(dtype=float)
 prio = float(rec["prioridad"]) if not _is_na(rec["prioridad"]) else np.nan
+rank_short = "fuera del filtro"
 if force_id == sid:
     rank_txt = "fuera del filtro"
 else:
     rank_pos = int(np.sum(prio_vals > prio)) + 1 if not _is_na(prio) else None
     top_pct = rank_pos / max(len(prio_vals), 1) if rank_pos else None
-    rank_txt = (f"#{fmt_int(rank_pos)} de {fmt_int(len(prio_vals))} en el filtro · top {fmt_pct(top_pct, 0)}"
-                if rank_pos else "—")
+    top_s = (fmt_pct(top_pct, 0) if top_pct is not None and top_pct >= 0.01 else
+             f"{fmt_pct(max(top_pct or 0, 0.001), 1)}")
+    rank_txt = (f"#{fmt_int(rank_pos)} de {fmt_int(len(prio_vals))} en el filtro · top {top_s}" if rank_pos else "—")
+    rank_short = f"#{fmt_int(rank_pos)} de {fmt_int(len(prio_vals))} · top {top_s}" if rank_pos else "—"
 
 # Descomposición del índice de prioridad (mismos pesos por defecto de core.data).
 w = DEFAULT_WEIGHTS
@@ -1053,7 +1059,7 @@ tot_fin = float(pd.to_numeric(credits["valor_financiacion"], errors="coerce").su
 first_date = credits["fecha_aprobacion"].min()
 conf_txt = fmt_pct(conf, 0) if not _is_na(conf) else "—"
 kpi_row([
-    kpi_card("Riesgo del crédito analizado", f"{rk}", f"Confianza del modelo {conf_txt} · {_period_label(rec['fecha_aprobacion'])}",
+    kpi_card("Riesgo predicho", f"{rk}", f"Confianza {_nb(conf_txt)} · {_nb(_period_label(rec['fecha_aprobacion']))}",
              tone={"Alto": "alto", "Medio": "medio", "Bajo": "bajo"}.get(rk, "ink"), icon=RISK_ICONS.get(rk, "⚪"),
              help="Clase predicha por el modelo para el crédito analizado; la confianza es la probabilidad de esa clase."),
     kpi_card("Índice de prioridad", fmt_num(prio, 1) if not _is_na(prio) else "—", rank_txt, tone="accent",
@@ -1061,9 +1067,9 @@ kpi_row([
              help="Combinación ponderada de intensidad de riesgo (60 %), exposición (25 %) y mora histórica (15 %)."),
     kpi_card("Exposición en riesgo", fmt_cop(rec["exposicion_riesgo"]), "Valor financiado × intensidad de riesgo",
              tone="ink", icon="💰"),
-    kpi_card("Historial con la institución", f"{len(credits)} crédito{'s' if len(credits) != 1 else ''}",
-             f"{fmt_cop(tot_fin)} financiados desde {_period_label(first_date)}", tone="ink", icon="🗂️"),
-    kpi_card("Ruta y SLA", f"{route} · {act['sla']}", act["nombre"], tone=ROUTE_TONE.get(route, "ink"), icon="🧭",
+    kpi_card("Historial", f"{len(credits)} crédito{'s' if len(credits) != 1 else ''}",
+             f"{_nb(fmt_cop(tot_fin))} financiados desde {_nb(_period_label(first_date))}", tone="ink", icon="🗂️"),
+    kpi_card("Ruta y SLA", route, f"{act['nombre']} · SLA {_nb(act['sla'])}", tone=ROUTE_TONE.get(route, "ink"), icon="🧭",
              help=act["accion"]),
 ])
 
@@ -1190,7 +1196,7 @@ with cr_:
             f"<div><div class='fx-k'>Fiabilidad histórica de la etiqueta</div>{prec_html}</div></div>"
             f"<div class='fx-route' style='--rc:{_rc(route)}'><div class='hd'>{_route_chip(route)}"
             f"<span class='sla'>SLA · {esc(act['sla'])}</span></div><div class='act'>{esc(act['accion'])}</div></div>"
-            f"<div class='fx-prio'><div class='row'><span>Índice de prioridad · {esc(rank_txt)}</span>"
+            f"<div class='fx-prio'><div class='row'><span>Índice de prioridad · {esc(rank_short)}</span>"
             f"<span><b>{fmt_num(prio, 1) if not _is_na(prio) else '—'}</b> / 100</span></div>"
             f"<div class='fx-stack'>{stack}</div><div class='fx-lg'>{legend}"
             f"<span style='--c:transparent;margin-left:auto'>pesos 60 · 25 · 15</span></div></div>{p3}",
@@ -1300,7 +1306,15 @@ tb = pd.DataFrame({
 })
 st.dataframe(
     tb, hide_index=True, width="stretch", key="ficha_tabla_creditos",
+    column_order=["Analizado", "Aprobación", "Riesgo predicho", "Confianza", "Riesgo observado", "Prioridad", "Ruta",
+                  "Valor financiado", "% de la matrícula", "Cuotas", "Tipo de interés", "Programa", "Crédito",
+                  "En el filtro"],
     column_config={
+        "Aprobación": st.column_config.TextColumn("Aprobación", width=92),
+        "Riesgo predicho": st.column_config.TextColumn("Riesgo predicho", width=112),
+        "Riesgo observado": st.column_config.TextColumn("Riesgo observado", width=118),
+        "Ruta": st.column_config.TextColumn("Ruta", width=118),
+        "Cuotas": st.column_config.NumberColumn("Cuotas", width=64),
         "Analizado": st.column_config.TextColumn("", width=34, help="Crédito analizado en esta ficha"),
         "% de la matrícula": st.column_config.ProgressColumn("% matrícula", format="percent", min_value=0,
                                                              max_value=1, help="Valor financiado / matrícula neta "
@@ -1320,7 +1334,7 @@ _anchor_section("ficha-pares", "Comparación con sus pares",
                 "Percentil del estudiante en cada métrica frente a los créditos de su grupo de referencia (sin contar "
                 "sus propios créditos). La franja amarilla es el rango típico p25–p75; los puntos amarillos son "
                 "atípicos (≤ p10 o ≥ p90).", "Paso 3 · Pares")
-g1, g2 = st.columns([2.2, 1], vertical_alignment="center")
+g1, g2 = st.columns([3.0, 1], vertical_alignment="bottom")
 with g1:
     choice = st.segmented_control(
         "Grupo de pares", peer_opts, key="ficha_pares", default=peer_group, required=True,
@@ -1506,12 +1520,14 @@ with pl2:
                                   key="ficha_f_monto", help="Solo aplica si hay compromiso de pago.")
         f_fcomp = f4.date_input("Fecha del compromiso", value=today + timedelta(days=7), format="DD/MM/YYYY",
                                 key="ficha_f_fcomp")
-        f_comp = st.checkbox("El estudiante asumió un compromiso de pago", key="ficha_f_comp")
+        f_comp = st.checkbox("El estudiante asumió un compromiso de pago", key="ficha_f_comp",
+                             help="Se marca automáticamente si el resultado es «con compromiso de pago».")
         f_notas = st.text_area("Notas", placeholder="Resumen de la conversación, acuerdos y próximos pasos…",
                                max_chars=600, key="ficha_f_notas", height=92)
         submitted = st.form_submit_button("Registrar gestión", type="primary", icon=":material/add_task:",
                                           width="stretch", key="ficha_f_submit")
     if submitted:
+        f_comp = bool(f_comp or f_res == RESULTADOS[0])
         if f_comp and (not f_monto or f_monto <= 0):
             st.error("Indica el monto del compromiso de pago (mayor que cero) o desmarca el compromiso.", icon="⚠️")
         else:
@@ -1542,7 +1558,11 @@ if log_df_student.empty:
 else:
     st.dataframe(log_df_student.drop(columns=["ID estudiante", "Estudiante"]).iloc[::-1], hide_index=True,
                  width="stretch", key="ficha_bitacora_tabla",
-                 column_config={"Monto comprometido": st.column_config.NumberColumn(format="$ %d")})
+                 column_order=["Fecha de gestión", "Canal", "Resultado", "Compromiso", "Monto comprometido",
+                               "Fecha del compromiso", "Notas", "Ruta", "Crédito", "Gestor", "Registrado"],
+                 column_config={"Monto comprometido": st.column_config.NumberColumn(format="localized"),
+                                "Notas": st.column_config.TextColumn("Notas", width="large"),
+                                "Compromiso": st.column_config.TextColumn("Compromiso", width=96)})
 if logs_all:
     b1, b2 = st.columns([4, 1.2], vertical_alignment="center")
     with b1:

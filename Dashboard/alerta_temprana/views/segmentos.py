@@ -1691,8 +1691,13 @@ def _tab_equidad() -> None:
             st.markdown("<div class='sg-cap'>Razón de disparidad</div>", unsafe_allow_html=True)
             st.markdown(_legend([(YELLOW, "Referencia", "dt"), (RISK_COLORS["Bajo"], "Dentro del rango", "dt"),
                                  (RISK_COLORS["Alto"], "Fuera del rango", "dt")]), unsafe_allow_html=True)
-            show_fig(_disparity_fig(t, ref, mcol, fm), key=f"{P}_fair_disp", height=max(260, 46 * len(t) + 110),
-                     legend=False)
+            ref_v = float(t.loc[t["g"] == ref, mcol].iloc[0])
+            if _isnan(ref_v) or ref_v <= 0:
+                _note(f"<b>{esc(ref)}</b> tiene {esc(fm.lower())} de 0 % (o sin dato) en el filtro actual: la razón "
+                      "de disparidad no está definida para esta referencia.")
+            else:
+                show_fig(_disparity_fig(t, ref, mcol, fm), key=f"{P}_fair_disp", height=max(260, 46 * len(t) + 110),
+                         legend=False)
         refrow = t[t["g"] == ref].iloc[0]
         tbl = pd.DataFrame({
             SENSITIVE[attr]: t["g"], "Créditos": t["n"].astype(int), "Tasa de alerta": t["pct_pred"],
@@ -1716,14 +1721,20 @@ def _tab_equidad() -> None:
         st.dataframe(tbl, hide_index=True, width="stretch", column_config=cfg)
         # lectura
         rr_obs = tbl.get("Razón observada")
-        worst_i = (tbl["Razón alerta"] - 1).abs().idxmax()
-        w = tbl.loc[worst_i]
-        txt = (f"Mayor disparidad de alertas: <b>{esc(w[SENSITIVE[attr]])}</b> con razón <b>{fmt_num(w['Razón alerta'], 2)}</b>")
-        if rr_obs is not None and not _isnan(w.get("Razón observada", NAN)):
-            txt += (f" frente a una razón observada de <b>{fmt_num(w['Razón observada'], 2)}</b>: "
-                    + ("el modelo amplifica la brecha real." if abs(w["Razón alerta"] - 1) > abs(w["Razón observada"] - 1) + 0.05
-                       else "la brecha del modelo es similar o menor a la observada."))
-        _note(txt + " Los grupos con menos créditos tienen razones más inestables.")
+        dev = (tbl["Razón alerta"] - 1).abs()
+        if dev.notna().any():
+            w = tbl.loc[dev.idxmax()]
+            txt = (f"Mayor disparidad de alertas: <b>{esc(w[SENSITIVE[attr]])}</b> con razón "
+                   f"<b>{fmt_num(w['Razón alerta'], 2)}</b>")
+            if rr_obs is not None and not _isnan(w.get("Razón observada", NAN)):
+                txt += (f" frente a una razón observada de <b>{fmt_num(w['Razón observada'], 2)}</b>: "
+                        + ("el modelo amplifica la brecha real."
+                           if abs(w["Razón alerta"] - 1) > abs(w["Razón observada"] - 1) + 0.05
+                           else "la brecha del modelo es similar o menor a la observada."))
+            _note(txt + " Los grupos con menos créditos tienen razones más inestables.")
+        else:
+            _note(f"El grupo de referencia <b>{esc(ref)}</b> no tiene alertas Alto en el filtro actual (tasa 0 %): la "
+                  "razón de disparidad no está definida. Elige otra referencia o amplía los filtros.")
         download_bar(tbl, f"equidad_{attr}", key=f"{P}_dl_fair", label="Auditoría")
 
 
