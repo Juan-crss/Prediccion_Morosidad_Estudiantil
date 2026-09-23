@@ -120,7 +120,8 @@ _CSS = """
 .rs-route-n{font-family:'Space Grotesk','Inter',sans-serif;font-size:26px;font-weight:700;color:var(--sat-text);margin-top:6px;line-height:1.1}
 .rs-route-n small{font-family:'Inter',sans-serif;font-size:12.5px;font-weight:500;color:var(--sat-muted)}
 .rs-route-name{font-weight:700;color:var(--sat-text);font-size:14px;margin-top:2px}
-.rs-route-a{font-size:12.5px;color:var(--sat-muted);margin-top:4px;line-height:1.4}
+.rs-route-a{font-size:12.5px;color:var(--sat-muted);margin-top:4px;line-height:1.4;min-height:70px}
+.rs-route-m{font-size:13px;color:var(--sat-text);font-weight:700;margin-top:4px}
 .rs-link-t{font-weight:700;color:var(--sat-text);font-size:15px}
 .rs-link-d{font-size:12.8px;color:var(--sat-muted);line-height:1.4;min-height:54px}
 .rs-kpi .sat-kpi .lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -234,6 +235,11 @@ def _with_spark(card_html: str, vals, color: str, caption: str) -> str:
     if not sp:
         return card_html
     return card_html[:-6] + sp + f"<div class='rs-spark-cap'>{esc(caption)}</div></div>"
+
+
+def _nb(s: str) -> str:
+    """Espacios no separables (evita cortar '$ 2,7 mil M' entre líneas)."""
+    return str(s).replace(" ", "\u00a0")
 
 
 def _short(s, n: int = 34) -> str:
@@ -535,7 +541,7 @@ def _top_fig(tab: pd.DataFrame, col: str, global_alto: float) -> go.Figure:
                        "<br>Créditos: %{customdata[1]} · en Alto: %{customdata[2]}"
                        "<br>Monto en Alto: %{customdata[5]} · Mora Datacrédito: %{customdata[6]}<extra></extra>")))
     if not _isnan(global_alto):
-        fig.add_vline(x=global_alto, line=dict(color=p["text"], width=1.2, dash="dot"))
+        fig.add_vline(x=global_alto, line=dict(color=p["text"], width=1.2, dash="dot"), layer="below")
         fig.add_annotation(x=global_alto, y=1, yref="paper", text=f"Promedio {fmt_pct(global_alto)}", showarrow=False,
                            xanchor="left", yanchor="bottom", xshift=4, font=dict(size=11, color=p["muted"]))
     xmax = float(t["pct_alto"].max()) if len(t) else 0.1
@@ -848,7 +854,7 @@ else:
     d_n = d_alto = d_mora = d_monto = no_cmp
 
 mon = _monthly(dff).tail(12)
-spark_cap = f"Serie mensual · últimos {len(mon)} meses del filtro"
+spark_cap = f"Últimos {len(mon)} meses"
 ink = p["text"]
 kpis = [
     {"label": "Créditos filtrados", "value": fmt_int(S["n"]),
@@ -864,7 +870,7 @@ kpis = [
      "spark": mon["mora"], "color": RISK_COLORS["Medio"], "icon": "🏦",
      "help": "Porcentaje de créditos con mora reportada por Datacrédito (dato observado, no predicción)."},
     {"label": "Monto financiado total", "value": fmt_cop(S["monto"]),
-     "sub": f"Ticket promedio {fmt_cop(S['ticket'])} · {fmt_cop(S['monto_Alto'])} en Alto", "tone": "accent",
+     "sub": f"Ticket promedio {_nb(fmt_cop(S['ticket']))} · {_nb(fmt_cop(S['monto_Alto']))} en Alto", "tone": "accent",
      "delta": d_monto[0], "dir": d_monto[1], "spark": mon["monto"], "color": ink, "icon": "💰",
      "help": "Suma del valor financiado de los créditos filtrados. Delta: variación del monto aprobado."},
 ]
@@ -955,7 +961,8 @@ with st.container(border=True):
                                    format_func=lambda v: _DIM_SHORT.get(v, v)) or "Segmento de programa"
     cur_min = int(st.session_state.get(f"{P}_minn", 30) or 30)
     cur_top = int(st.session_state.get(f"{P}_topn", 10) or 10)
-    with k2.popover(f"n ≥ {fmt_int(cur_min)} · Top {cur_top}", icon=":material/tune:", width="stretch"):
+    with k2.popover(f"n ≥ {fmt_int(cur_min)} · Top {cur_top}", icon=":material/tune:", width="stretch",
+                    help="Ajustar el n mínimo por segmento y cuántos segmentos mostrar"):
         min_n = int(st.number_input("n mínimo de créditos por segmento", min_value=1, max_value=2000, value=30, step=5,
                                     key=f"{P}_minn", help="Evita conclusiones sobre segmentos con muy pocos créditos. "
                                                           "También aplica a los hallazgos automáticos."))
@@ -1095,7 +1102,8 @@ for c_, (k_, v_) in zip(rcols, routes.items()):
         f"<span class='rs-route-sla'>SLA {esc(info['sla'])}</span></div>"
         f"<div class='rs-route-name'>{esc(info['nombre'])}</div>"
         f"<div class='rs-route-n'>{fmt_int(v_['n'])} <small>créditos · {fmt_pct(_div(v_['n'], S['n']))}</small></div>"
-        f"<div class='rs-route-a'>{fmt_cop(v_['monto'])} financiados. {esc(info['accion'])}</div></div>",
+        f"<div class='rs-route-m'>{fmt_cop(v_['monto'])} financiados</div>"
+        f"<div class='rs-route-a'>{esc(info['accion'])}</div></div>",
         unsafe_allow_html=True)
 links = [q for q in _QUICK_LINKS if can_access(q[0])]
 if links:
